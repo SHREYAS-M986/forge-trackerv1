@@ -49,6 +49,46 @@ const QUOTES = [
 "A year from now, you'll wish you started today."
 ];
 
+/* ---------- Exercise library (original motion cues, no copyrighted media) ---------- */
+const CALISTHENICS = [
+  {name:"Push-Up", type:"push", area:"Chest / Triceps / Shoulders", sets:"3 x 12–15", cue:"Keep body in a straight line, elbows around 45° from torso."},
+  {name:"Pull-Up", type:"pull", area:"Back / Biceps", sets:"3 x 6–10", cue:"Full hang to chin over bar, control the descent."},
+  {name:"Dip", type:"push", area:"Triceps / Chest", sets:"3 x 8–12", cue:"Lean slightly forward, elbows tucked close to body."},
+  {name:"Bodyweight Squat", type:"squat", area:"Quads / Glutes", sets:"3 x 15–20", cue:"Knees track over toes, chest stays up."},
+  {name:"Pistol Squat (progression)", type:"squat", area:"Quads / Glutes / Balance", sets:"3 x 5 each leg", cue:"Use a support at first, control the descent."},
+  {name:"Walking Lunge", type:"squat", area:"Quads / Glutes", sets:"3 x 12 each leg", cue:"Front knee stays stacked over the ankle."},
+  {name:"Plank", type:"core", area:"Core / Shoulders", sets:"3 x 45–60s hold", cue:"Squeeze glutes, don't let hips sag or pike."},
+  {name:"Hollow Body Hold", type:"core", area:"Core", sets:"3 x 20–30s hold", cue:"Lower back pressed to floor, arms and legs extended."},
+  {name:"L-Sit", type:"core", area:"Core / Hip flexors", sets:"3 x 10–20s hold", cue:"Push shoulders down away from ears, legs straight."},
+  {name:"Mountain Climbers", type:"core", area:"Core / Cardio", sets:"3 x 30s", cue:"Drive knees fast, keep hips low and level."},
+  {name:"Superman", type:"hinge", area:"Lower back / Glutes", sets:"3 x 15", cue:"Lift chest and legs together, squeeze at the top."},
+  {name:"Glute Bridge", type:"hinge", area:"Glutes / Hamstrings", sets:"3 x 15", cue:"Squeeze glutes hard at the top, avoid arching the lower back."},
+  {name:"Inverted Row", type:"pull", area:"Back / Biceps", sets:"3 x 10–12", cue:"Pull chest to the bar, squeeze shoulder blades together."},
+  {name:"Pike Push-Up", type:"push", area:"Shoulders", sets:"3 x 8–10", cue:"Hips high, aim the crown of your head toward the floor."},
+  {name:"Burpee", type:"push", area:"Full body / Cardio", sets:"3 x 10", cue:"Chest to floor, explosive jump at the top."},
+];
+const LOOKSMAXING = [
+  {name:"Chin Tucks", type:"core", area:"Jawline / Neck posture", sets:"3 x 15", cue:"Pull chin straight back like making a double chin, don't tilt down."},
+  {name:"Neck Curl", type:"hinge", area:"Neck / Jawline", sets:"3 x 12", cue:"Slow controlled curl, add light hand resistance if easy."},
+  {name:"Isometric Jaw Hold", type:"core", area:"Jaw / Masseter", sets:"3 x 10s holds", cue:"Light to moderate pressure only — don't overdo it."},
+  {name:"Posture Tongue Position", type:"stretch", area:"Tongue posture / Jawline", sets:"Hold through the day", cue:"Tongue flat on the roof of the mouth, lips sealed, teeth lightly touching. Evidence for changing bone structure is limited — this mainly builds posture awareness."},
+  {name:"Wall Posture Stand", type:"stretch", area:"Posture / Spine", sets:"2 x 60s", cue:"Head, shoulder blades and glutes all touching the wall."},
+  {name:"Cheek Lift (face yoga)", type:"core", area:"Cheeks", sets:"3 x 10", cue:"Smile wide, hold two seconds, release slowly."},
+  {name:"Shoulder External Rotation", type:"pull", area:"Shoulders / Posture", sets:"3 x 15", cue:"Elbows pinned at sides, rotate forearms outward."},
+  {name:"Wide-Grip Pull-Up", type:"pull", area:"Back width / V-taper", sets:"3 x 6–10", cue:"Wide grip, drive elbows down to bring chest to the bar."},
+  {name:"Lateral Raise", type:"pull", area:"Shoulders / V-taper", sets:"3 x 15", cue:"Raise to shoulder height only, control the negative."},
+  {name:"Face Pull (band)", type:"pull", area:"Rear delts / Posture", sets:"3 x 15", cue:"Pull toward your face, elbows finish high and wide."},
+  {name:"Standing Cat-Cow", type:"stretch", area:"Spine mobility / Posture", sets:"2 x 10", cue:"Slow controlled wave through the whole spine."},
+  {name:"Even-Sided Chewing", type:"core", area:"Jaw / Masseter", sets:"3 x 30 chews", cue:"Sugar-free gum, alternate sides evenly to keep jaw symmetric."},
+];
+
+function motionIcon(type){
+  const bar = `<svg width="30" height="30" viewBox="0 0 30 30"><rect class="mo-bar" x="6" y="13" width="18" height="4" rx="2" fill="var(--gold)"/></svg>`;
+  const dot = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="mo-dot" cx="15" cy="15" r="6"/></svg>`;
+  if(type==="squat"||type==="hinge") return `<div class="motion-${type}">${bar}</div>`;
+  return `<div class="motion-${type}">${dot}</div>`;
+}
+
 /* ---------- State ---------- */
 const DEFAULT_STATE = () => ({
   habits: {
@@ -56,13 +96,19 @@ const DEFAULT_STATE = () => ({
     weekly: ["Meal prep","Long run","Deep clean room","Review budget","Call family","Plan next week"],
     monthly: ["Full body progress photo","Review goals","Declutter","Skill practice review"],
   },
-  dailyLogs: {},      // "YYYY-MM-DD" -> [bool x7]
-  weeklyLogs: {},      // weekIndex(0-51) -> [bool x6]
-  monthlyLogs: {},      // monthIndex(0-11) -> [bool x4]
-  money: {},           // monthIndex -> {income,fixed,variable}
+  dailyLogs: {},
+  weeklyLogs: {},
+  monthlyLogs: {},
+  weightLogs: {},     // weekIndex -> {date, weight}
+  stepLogs: {},        // "YYYY-MM-DD" -> steps
+  money: { initialBalance: 0 },
   goals: [],
   learn: [],
-  settings: { notifOn:false, reminderTime:"20:00" },
+  settings: {
+    notifOn:false, reminderTime:"20:00",
+    stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
+    reduceMotion:false,
+  },
 });
 
 let state = loadState();
@@ -71,25 +117,30 @@ function loadState(){
     const raw = localStorage.getItem("forgeData");
     if(!raw) return DEFAULT_STATE();
     const parsed = JSON.parse(raw);
-    return {...DEFAULT_STATE(), ...parsed};
+    const d = DEFAULT_STATE();
+    return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
   }catch(e){ return DEFAULT_STATE(); }
 }
 function saveState(){ localStorage.setItem("forgeData", JSON.stringify(state)); }
 
+if(state.settings.reduceMotion) document.body.classList.add("reduce-motion");
+
 /* ---------- Date helpers ---------- */
 function fmtDate(d){ return d.toISOString().slice(0,10); }
 function todayKey(){ return fmtDate(new Date()); }
-function dayIndexInYear(d){ return Math.floor((d - YEAR_START) / 86400000); } // 0-364
+function dayIndexInYear(d){ return Math.floor((d - YEAR_START) / 86400000); }
 function monthIndexOf(d){
-  let idx=0, cum=0;
-  for(let i=0;i<12;i++){ if(d >= new Date(MONTHS[i].year, monthNumFromName(MONTHS[i].name), 1) &&
-      (i===11 || d < new Date(MONTHS[i+1].year, monthNumFromName(MONTHS[i+1].name),1))) return i; }
+  for(let i=0;i<12;i++){
+    const start = new Date(MONTHS[i].year, monthNumFromName(MONTHS[i].name), 1);
+    const nextStart = i===11 ? null : new Date(MONTHS[i+1].year, monthNumFromName(MONTHS[i+1].name), 1);
+    if(d >= start && (!nextStart || d < nextStart)) return i;
+  }
   return 0;
 }
 function monthNumFromName(name){
   return ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(name);
 }
-function weekIndexOf(d){ return Math.min(Math.floor(dayIndexInYear(d)/7), 51); }
+function weekIndexOf(d){ return Math.min(Math.max(Math.floor(dayIndexInYear(d)/7),0), 51); }
 function quoteForToday(){
   const idx = ((dayIndexInYear(new Date()) % QUOTES.length) + QUOTES.length) % QUOTES.length;
   return QUOTES[idx];
@@ -110,25 +161,69 @@ function toast(msg){
   t._timer = setTimeout(()=>t.classList.remove("show"), 2200);
 }
 
-/* ---------- Navigation ---------- */
-const views = ["home","habits","money","goals","learn","settings"];
+/* ---------- Sheets (More / Weight modal) ---------- */
+function showSheet(id){
+  const el = document.getElementById(id);
+  el.classList.remove("hidden");
+  requestAnimationFrame(()=>requestAnimationFrame(()=> el.classList.add("open")));
+}
+function hideSheet(id){
+  const el = document.getElementById(id);
+  el.classList.remove("open");
+  setTimeout(()=> el.classList.add("hidden"), 260);
+}
+document.getElementById("moreBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id==="moreBackdrop") hideSheet("moreBackdrop");
+});
+document.querySelectorAll(".sheet-item").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    hideSheet("moreBackdrop");
+    setTimeout(()=> showView(btn.dataset.view), 200);
+  });
+});
+
+/* ---------- Navigation with slide transition ---------- */
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","settings"];
 function showView(name){
-  views.forEach(v => document.getElementById("view-"+v)?.classList.toggle("hidden", v!==name));
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
+  const target = document.getElementById("view-"+name);
+  if(!target) return;
+  const current = VIEWS.map(v=>document.getElementById("view-"+v)).find(el => el && !el.classList.contains("hidden"));
+  if(current === target){ runViewRenderer(name); return; }
+  const swap = ()=>{
+    VIEWS.forEach(v=>{
+      const el = document.getElementById("view-"+v);
+      if(el && v!==name) el.classList.add("hidden");
+    });
+    target.classList.remove("hidden");
+    target.classList.add("slide-in");
+    requestAnimationFrame(()=>requestAnimationFrame(()=> target.classList.remove("slide-in")));
+    runViewRenderer(name);
+  };
+  if(current && !state.settings.reduceMotion){
+    current.classList.add("slide-out");
+    setTimeout(()=>{ current.classList.remove("slide-out"); swap(); }, 160);
+  } else {
+    swap();
+  }
+}
+function runViewRenderer(name){
   if(name==="home") renderHome();
   if(name==="habits") renderHabits();
+  if(name==="fitness") renderFitness();
+  if(name==="analytics") renderAnalytics();
   if(name==="money") renderMoney();
   if(name==="goals") renderGoals();
   if(name==="learn") renderLearn();
+  if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
-  b.addEventListener("click", ()=> showView(b.dataset.view));
+  b.addEventListener("click", ()=>{
+    if(b.dataset.view==="more"){ showSheet("moreBackdrop"); return; }
+    showView(b.dataset.view);
+  });
 });
-document.getElementById("settingsBtn").addEventListener("click", ()=>{
-  views.forEach(v => document.getElementById("view-"+v)?.classList.add("hidden"));
-  document.getElementById("view-settings").classList.remove("hidden");
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
-});
+document.getElementById("settingsBtn").addEventListener("click", ()=> showView("settings"));
 
 /* ---------- HOME ---------- */
 let trendChartInstance = null;
@@ -170,15 +265,33 @@ function renderHome(){
       <div class="check-toggle ${on?"on":""}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#11111B" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div>`;
     card.querySelector(".check-toggle").addEventListener("click", ()=>{
       const arr = state.dailyLogs[key] || Array(total).fill(false);
-      arr[i] = !arr[i];
+      const turningOn = !arr[i];
+      arr[i] = turningOn;
       state.dailyLogs[key] = arr;
       saveState();
       renderHome();
+      if(turningOn && !state.settings.reduceMotion){
+        requestAnimationFrame(()=>{
+          const newCard = list.children[i];
+          if(newCard){
+            newCard.classList.add("pop");
+            newCard.querySelector(".check-toggle").classList.add("pop");
+            setTimeout(()=>newCard.classList.remove("pop"), 650);
+          }
+        });
+      }
     });
     list.appendChild(card);
   });
 
+  const stepsWrap = document.getElementById("stepsCardWrap");
+  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
+  if(state.settings.stepsOn){
+    document.getElementById("stepsInput").value = state.stepLogs[key] || "";
+  }
+
   renderTrendChart();
+  maybePromptWeight();
 }
 
 function computeStreak(){
@@ -222,15 +335,19 @@ function renderTrendChart(){
     }
   });
 }
+document.getElementById("stepsInput").addEventListener("input", (e)=>{
+  state.stepLogs[todayKey()] = +e.target.value || 0;
+  saveState();
+});
 
 /* ---------- HABITS ---------- */
 let currentMonthIdx = monthIndexOf(new Date());
 let currentWeekIdx = weekIndexOf(new Date());
 let habitSeg = "daily";
 
-document.querySelectorAll(".seg-btn").forEach(b=>{
+document.querySelectorAll("#habitSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
-    document.querySelectorAll(".seg-btn").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll("#habitSeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     habitSeg = b.dataset.seg;
     ["daily","weekly","monthly"].forEach(s=>document.getElementById("seg-"+s).classList.toggle("hidden", s!==habitSeg));
@@ -348,15 +465,131 @@ function renderMonthly(){
   });
 }
 
+/* ---------- FITNESS ---------- */
+let fitnessSeg = "calisthenics";
+document.querySelectorAll("#fitnessSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    fitnessSeg = b.dataset.fseg;
+    renderFitness();
+  });
+});
+function renderFitness(){
+  const list = document.getElementById("exerciseList");
+  const hint = document.getElementById("fitnessHint");
+  const data = fitnessSeg==="calisthenics" ? CALISTHENICS : LOOKSMAXING;
+  hint.textContent = fitnessSeg==="calisthenics"
+    ? "Bodyweight strength moves. Motion icons show the movement pattern — push, pull, squat, hinge, hold or stretch."
+    : "Posture, jaw and physique-aesthetic focused moves. Facial-exercise research is limited — treat these as posture/muscle-tone habits, not guaranteed structural change.";
+  list.innerHTML = "";
+  data.forEach(ex=>{
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+    card.innerHTML = `
+      <div class="exercise-motion">${motionIcon(ex.type)}</div>
+      <div class="exercise-info">
+        <div class="exercise-name">${escapeHtml(ex.name)}</div>
+        <div class="exercise-meta">${escapeHtml(ex.area)} · ${escapeHtml(ex.sets)}</div>
+        <div class="exercise-cue">${escapeHtml(ex.cue)}</div>
+        <span class="exercise-link" data-name="${escapeHtml(ex.name)}">Watch form video ↗</span>
+      </div>`;
+    card.querySelector(".exercise-link").addEventListener("click", (e)=>{
+      const q = encodeURIComponent(e.target.dataset.name + " proper form");
+      window.open(`https://www.youtube.com/results?search_query=${q}`, "_blank");
+    });
+    list.appendChild(card);
+  });
+}
+
+/* ---------- ANALYTICS ---------- */
+let monthlyChartInstance=null, weeklyTrendChartInstance=null, weightChartInstance=null, stepsChartInstance=null;
+function renderAnalytics(){
+  const dailyTotal = state.habits.daily.length;
+  let ytdDone=0, ytdPossible=0, monthPcts=[];
+  MONTHS.forEach((m,i)=>{
+    const start = monthStartDate(i);
+    let done=0;
+    for(let d=1; d<=m.days; d++){
+      const key = fmtDate(new Date(start.getFullYear(), start.getMonth(), d));
+      const log = state.dailyLogs[key] || [];
+      done += log.filter(Boolean).length;
+    }
+    const possible = dailyTotal*m.days;
+    ytdDone += done; ytdPossible += possible;
+    monthPcts.push(possible ? done/possible : 0);
+  });
+  const overallPct = ytdPossible ? ytdDone/ytdPossible : 0;
+  document.getElementById("anaOverallPct").textContent = Math.round(overallPct*100)+"%";
+  let bestIdx = monthPcts.reduce((best,v,i,arr)=> v>arr[best]?i:best, 0);
+  document.getElementById("anaBestMonth").textContent = monthPcts[bestIdx]>0 ? MONTHS[bestIdx].name.slice(0,3) : "—";
+  document.getElementById("anaStreak").textContent = computeStreak();
+  let totalSavings=0;
+  for(let i=0;i<12;i++){ const e=state.money[i]; if(e) totalSavings += (e.income||0)-(e.fixed||0)-(e.variable||0); }
+  document.getElementById("anaSavings").textContent = "₹"+totalSavings.toLocaleString("en-IN");
+
+  const mLabels = MONTHS.map(m=>m.name.slice(0,3));
+  const mData = monthPcts.map(p=>Math.round(p*100));
+  const ctx1 = document.getElementById("monthlyChart");
+  if(monthlyChartInstance) monthlyChartInstance.destroy();
+  monthlyChartInstance = new Chart(ctx1, {
+    type:"bar",
+    data:{labels:mLabels, datasets:[{data:mData, backgroundColor:"#F9C74F", borderRadius:6}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:100,ticks:{color:"#8991B3",callback:v=>v+"%"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+
+  const wLabels=[], wData=[];
+  const nowWeek = weekIndexOf(new Date());
+  for(let i=Math.max(0,nowWeek-11); i<=nowWeek; i++){
+    const log = state.weeklyLogs[i] || [];
+    const total = state.habits.weekly.length;
+    wLabels.push("W"+(i+1));
+    wData.push(total ? Math.round((log.filter(Boolean).length/total)*100) : 0);
+  }
+  const ctx2 = document.getElementById("weeklyTrendChart");
+  if(weeklyTrendChartInstance) weeklyTrendChartInstance.destroy();
+  weeklyTrendChartInstance = new Chart(ctx2, {
+    type:"line",
+    data:{labels:wLabels, datasets:[{data:wData, borderColor:"#C9A6F7", backgroundColor:"rgba(201,166,247,.12)", tension:.4, fill:true, pointRadius:3, pointBackgroundColor:"#C9A6F7", borderWidth:2}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:100,ticks:{color:"#8991B3",callback:v=>v+"%"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+
+  const weightEntries = Object.values(state.weightLogs).filter(Boolean).sort((a,b)=> new Date(a.date)-new Date(b.date));
+  const ctx3 = document.getElementById("weightChart");
+  if(weightChartInstance) weightChartInstance.destroy();
+  weightChartInstance = new Chart(ctx3, {
+    type:"line",
+    data:{labels:weightEntries.map(e=>new Date(e.date).toLocaleDateString(undefined,{day:"numeric",month:"short"})),
+      datasets:[{data:weightEntries.map(e=>e.weight), borderColor:"#8FE3D0", backgroundColor:"rgba(143,227,208,.12)", tension:.35, fill:true, pointRadius:3, pointBackgroundColor:"#8FE3D0", borderWidth:2}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+
+  const sLabels=[], sData=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    sLabels.push(d.toLocaleDateString(undefined,{day:"numeric",month:"short"}));
+    sData.push(state.stepLogs[fmtDate(d)] || 0);
+  }
+  const ctx4 = document.getElementById("stepsChart");
+  if(stepsChartInstance) stepsChartInstance.destroy();
+  stepsChartInstance = new Chart(ctx4, {
+    type:"bar",
+    data:{labels:sLabels, datasets:[{data:sData, backgroundColor:"#F4879C", borderRadius:6}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+}
+
 /* ---------- MONEY ---------- */
 let currentMoneyIdx = monthIndexOf(new Date());
 document.getElementById("prevMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+11)%12; renderMoney(); });
 document.getElementById("nextMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+1)%12; renderMoney(); });
 let moneyChartInstance = null;
 
-function currentMoneyEntry(){
-  return state.money[currentMoneyIdx] || {income:0, fixed:0, variable:0};
-}
+function currentMoneyEntry(){ return state.money[currentMoneyIdx] || {income:0, fixed:0, variable:0}; }
 function renderMoney(){
   const m = MONTHS[currentMoneyIdx];
   document.getElementById("moneyMonthLabel").textContent = `${m.name} ${m.year}`;
@@ -364,6 +597,7 @@ function renderMoney(){
   document.getElementById("incomeInput").value = entry.income || "";
   document.getElementById("fixedInput").value = entry.fixed || "";
   document.getElementById("variableInput").value = entry.variable || "";
+  document.getElementById("initialBalanceInput").value = state.money.initialBalance || "";
   updateMoneyDerived();
   renderMoneyChart();
 }
@@ -375,6 +609,13 @@ function updateMoneyDerived(){
   const rate = income ? (savings/income)*100 : 0;
   document.getElementById("savingsOut").textContent = "₹" + savings.toLocaleString("en-IN");
   document.getElementById("savingsRateOut").textContent = Math.round(rate) + "%";
+
+  let cumulative = state.money.initialBalance || 0;
+  for(let i=0;i<=currentMoneyIdx;i++){
+    const e = i===currentMoneyIdx ? {income,fixed,variable} : (state.money[i]||{income:0,fixed:0,variable:0});
+    cumulative += (e.income||0)-(e.fixed||0)-(e.variable||0);
+  }
+  document.getElementById("runningBalanceOut").textContent = "₹" + cumulative.toLocaleString("en-IN");
 }
 ["incomeInput","fixedInput","variableInput"].forEach(id=>{
   document.getElementById(id).addEventListener("input", ()=>{
@@ -387,6 +628,11 @@ function updateMoneyDerived(){
     updateMoneyDerived();
     renderMoneyChart();
   });
+});
+document.getElementById("initialBalanceInput").addEventListener("input", (e)=>{
+  state.money.initialBalance = +e.target.value || 0;
+  saveState();
+  updateMoneyDerived();
 });
 function renderMoneyChart(){
   const labels = MONTHS.map(m=>m.name.slice(0,3));
@@ -501,27 +747,93 @@ function renderLearn(){
   });
 }
 
-/* ---------- SETTINGS ---------- */
-const notifToggle = document.getElementById("notifToggle");
-const reminderTime = document.getElementById("reminderTime");
-notifToggle.checked = state.settings.notifOn;
-reminderTime.value = state.settings.reminderTime;
+/* ---------- MANAGE HABITS (Settings) ---------- */
+let manageSeg = "daily";
+document.querySelectorAll("#manageSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#manageSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    manageSeg = b.dataset.mseg;
+    renderManageList();
+  });
+});
+function renderManageList(){
+  const wrap = document.getElementById("manageList");
+  wrap.innerHTML = "";
+  state.habits[manageSeg].forEach((name, idx)=>{
+    const row = document.createElement("div");
+    row.className = "manage-row";
+    row.innerHTML = `<input type="text" value="${escapeAttr(name)}" /><button aria-label="Remove">✕</button>`;
+    row.querySelector("input").addEventListener("input", (e)=>{
+      state.habits[manageSeg][idx] = e.target.value;
+      saveState();
+    });
+    row.querySelector("button").addEventListener("click", ()=> removeHabit(manageSeg, idx));
+    wrap.appendChild(row);
+  });
+}
+function addHabit(cat){
+  state.habits[cat].push("New habit");
+  if(cat==="daily") Object.keys(state.dailyLogs).forEach(k=> state.dailyLogs[k].push(false));
+  if(cat==="weekly") Object.keys(state.weeklyLogs).forEach(k=> state.weeklyLogs[k].push(false));
+  if(cat==="monthly") Object.keys(state.monthlyLogs).forEach(k=> state.monthlyLogs[k].push(false));
+  saveState(); renderManageList();
+  toast("Habit added");
+}
+function removeHabit(cat, idx){
+  if(state.habits[cat].length<=1){ toast("Keep at least one habit"); return; }
+  if(!confirm("Remove this habit? Its logged history will be removed too.")) return;
+  state.habits[cat].splice(idx,1);
+  if(cat==="daily") Object.keys(state.dailyLogs).forEach(k=> state.dailyLogs[k].splice(idx,1));
+  if(cat==="weekly") Object.keys(state.weeklyLogs).forEach(k=> state.weeklyLogs[k].splice(idx,1));
+  if(cat==="monthly") Object.keys(state.monthlyLogs).forEach(k=> state.monthlyLogs[k].splice(idx,1));
+  saveState(); renderManageList();
+  toast("Habit removed");
+}
+document.getElementById("addHabitBtn").addEventListener("click", ()=> addHabit(manageSeg));
 
-notifToggle.addEventListener("change", async ()=>{
-  if(notifToggle.checked){
-    if(!("Notification" in window)){ toast("Notifications not supported here"); notifToggle.checked=false; return; }
+/* ---------- SETTINGS ---------- */
+function renderSettings(){
+  document.getElementById("notifToggle").checked = state.settings.notifOn;
+  document.getElementById("reminderTime").value = state.settings.reminderTime;
+  document.getElementById("stepsToggle").checked = state.settings.stepsOn;
+  document.getElementById("weightToggle").checked = state.settings.weightOn;
+  document.getElementById("weightDaySelect").value = String(state.settings.weightDay);
+  document.getElementById("motionToggle").checked = state.settings.reduceMotion;
+  renderManageList();
+}
+
+document.getElementById("notifToggle").addEventListener("change", async (e)=>{
+  if(e.target.checked){
+    if(!("Notification" in window)){ toast("Notifications not supported here"); e.target.checked=false; return; }
     const perm = await Notification.requestPermission();
-    if(perm !== "granted"){ toast("Permission denied"); notifToggle.checked=false; return; }
+    if(perm !== "granted"){ toast("Permission denied"); e.target.checked=false; return; }
     toast("Reminders on");
-  } else {
-    toast("Reminders off");
-  }
-  state.settings.notifOn = notifToggle.checked;
+  } else { toast("Reminders off"); }
+  state.settings.notifOn = e.target.checked;
   saveState();
 });
-reminderTime.addEventListener("change", ()=>{
-  state.settings.reminderTime = reminderTime.value;
-  saveState();
+document.getElementById("reminderTime").addEventListener("change", (e)=>{
+  state.settings.reminderTime = e.target.value; saveState();
+});
+document.getElementById("stepsToggle").addEventListener("change", (e)=>{
+  state.settings.stepsOn = e.target.checked; saveState();
+  toast(e.target.checked ? "Step tracking on" : "Step tracking off");
+});
+document.getElementById("weightToggle").addEventListener("change", (e)=>{
+  state.settings.weightOn = e.target.checked; saveState();
+  toast(e.target.checked ? "Weekly weight check-in on" : "Weekly weight check-in off");
+});
+document.getElementById("weightDaySelect").addEventListener("change", (e)=>{
+  state.settings.weightDay = +e.target.value; saveState();
+});
+document.getElementById("motionToggle").addEventListener("change", (e)=>{
+  state.settings.reduceMotion = e.target.checked; saveState();
+  document.body.classList.toggle("reduce-motion", e.target.checked);
+});
+document.getElementById("logWeightNowBtn").addEventListener("click", ()=>{
+  document.getElementById("weightModalInput").value = "";
+  showSheet("weightBackdrop");
 });
 
 function checkReminderLoop(){
@@ -553,7 +865,7 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
   reader.onload = ()=>{
     try{
       const parsed = JSON.parse(reader.result);
-      state = {...DEFAULT_STATE(), ...parsed};
+      state = loadStateFrom(parsed);
       saveState();
       toast("Backup restored");
       showView("home");
@@ -561,6 +873,10 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
   };
   reader.readAsText(file);
 });
+function loadStateFrom(parsed){
+  const d = DEFAULT_STATE();
+  return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
+}
 document.getElementById("resetBtn").addEventListener("click", ()=>{
   if(confirm("This clears all data on this device. Continue?")){
     state = DEFAULT_STATE();
@@ -568,6 +884,34 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
     toast("Data reset");
     showView("home");
   }
+});
+
+/* ---------- Weekly weight modal logic ---------- */
+function maybePromptWeight(){
+  if(!state.settings.weightOn) return;
+  const now = new Date();
+  const wIdx = weekIndexOf(now);
+  if(now.getDay() !== state.settings.weightDay) return;
+  if(state.weightLogs[wIdx]) return;
+  if(state.settings.lastWeightPromptWeek === wIdx) return;
+  document.getElementById("weightModalInput").value = "";
+  showSheet("weightBackdrop");
+}
+document.getElementById("weightModalSave").addEventListener("click", ()=>{
+  const val = +document.getElementById("weightModalInput").value;
+  if(!val || val<=0){ toast("Enter a valid weight"); return; }
+  const wIdx = weekIndexOf(new Date());
+  state.weightLogs[wIdx] = {date: todayKey(), weight: val};
+  state.settings.lastWeightPromptWeek = wIdx;
+  saveState();
+  hideSheet("weightBackdrop");
+  toast("Weight logged");
+});
+document.getElementById("weightModalSkip").addEventListener("click", ()=>{
+  const wIdx = weekIndexOf(new Date());
+  state.settings.lastWeightPromptWeek = wIdx;
+  saveState();
+  hideSheet("weightBackdrop");
 });
 
 /* ---------- Install prompt ---------- */
@@ -590,6 +934,7 @@ document.getElementById("installBtn").addEventListener("click", async ()=>{
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+function escapeAttr(s){ return escapeHtml(s); }
 
 /* ---------- Service worker ---------- */
 if("serviceWorker" in navigator){
