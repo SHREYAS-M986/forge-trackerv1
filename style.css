@@ -221,3 +221,80 @@ input:checked + .slider:before{transform:translateX(20px);}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.01ms !important; transition-duration:.01ms !important;}
 }
+body.reduce-motion *{animation-duration:.01ms !important; transition-duration:.01ms !important;}
+
+/* view transitions */
+.view{transition: opacity .28s var(--ease), transform .28s var(--ease);}
+.view.slide-out{opacity:0; transform:translateX(-14px);}
+.view.slide-in{opacity:0; transform:translateX(14px);}
+
+/* habit check highlight pulse */
+@keyframes habitPop{
+  0%{ box-shadow:0 0 0 0 rgba(143,227,208,0.5); }
+  60%{ box-shadow:0 0 0 10px rgba(143,227,208,0); }
+  100%{ box-shadow:0 0 0 0 rgba(143,227,208,0); }
+}
+.habit-card.pop{ animation: habitPop .6s var(--ease); }
+@keyframes checkBounce{
+  0%{ transform:scale(.6) rotate(-10deg); }
+  60%{ transform:scale(1.15) rotate(3deg); }
+  100%{ transform:scale(1) rotate(0); }
+}
+.check-toggle.on.pop{ animation: checkBounce .45s var(--ease); }
+
+/* stat grid (analytics) */
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
+.mini-stat{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; text-align:center;}
+.mini-stat-num{font-size:19px; font-weight:700; color:var(--gold);}
+.mini-stat-label{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px;}
+
+/* bottom sheet (More / Weight modal) */
+.sheet-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:60;
+  display:flex; align-items:flex-end; justify-content:center;
+  opacity:0; transition:opacity .25s var(--ease); backdrop-filter: blur(2px);
+}
+.sheet-backdrop.open{opacity:1;}
+.sheet{
+  background:var(--surface); border:1px solid var(--border); border-bottom:none;
+  border-radius:22px 22px 0 0; width:100%; max-width:520px; padding:18px 20px calc(env(safe-area-inset-bottom,0px) + 20px);
+  transform:translateY(100%); transition: transform .32s var(--ease);
+}
+.sheet-backdrop.open .sheet{ transform:translateY(0); }
+.sheet-handle{width:36px; height:4px; background:var(--surface3); border-radius:100px; margin:0 auto 16px;}
+.sheet-item{
+  width:100%; display:flex; align-items:center; gap:12px; background:none; border:none; color:var(--text);
+  padding:14px 6px; font-size:14px; font-weight:600; cursor:pointer; border-radius:12px; transition: background .2s;
+  font-family:'Inter';
+}
+.sheet-item:active{background:var(--surface2);}
+
+/* exercise cards */
+.exercise-card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:14px; display:flex; gap:14px; align-items:center;}
+.exercise-motion{width:56px; height:56px; flex:none; display:flex; align-items:center; justify-content:center; background:var(--surface2); border-radius:14px;}
+.exercise-info{flex:1; min-width:0;}
+.exercise-name{font-weight:700; font-size:14px;}
+.exercise-meta{font-size:11px; color:var(--muted); margin-top:2px;}
+.exercise-cue{font-size:11.5px; color:var(--text); margin-top:6px; line-height:1.4;}
+.exercise-link{font-size:11px; color:var(--gold); margin-top:8px; display:inline-block; cursor:pointer; text-decoration:underline;}
+
+/* motion icons */
+.mo-dot{fill:var(--gold);}
+.motion-push .mo-dot, .motion-pull .mo-dot{animation: moveY 1.1s ease-in-out infinite;}
+.motion-pull .mo-dot{animation-direction:alternate-reverse;}
+@keyframes moveY{0%{transform:translateY(-8px);}50%{transform:translateY(8px);}100%{transform:translateY(-8px);}}
+.motion-squat .mo-bar{animation: squish 1.1s ease-in-out infinite; transform-origin:center;}
+@keyframes squish{0%,100%{transform:scaleY(1);}50%{transform:scaleY(.55) translateY(6px);}}
+.motion-hinge .mo-bar{animation: hinge 1.3s ease-in-out infinite; transform-origin:bottom center;}
+@keyframes hinge{0%,100%{transform:rotate(0deg);}50%{transform:rotate(28deg);}}
+.motion-core .mo-dot{animation: pulseGlow 1.4s ease-in-out infinite;}
+@keyframes pulseGlow{0%,100%{opacity:.5; transform:scale(.9);}50%{opacity:1; transform:scale(1.15);}}
+.motion-stretch .mo-bar{animation: stretchScale 1.8s ease-in-out infinite; transform-origin:center;}
+@keyframes stretchScale{0%,100%{transform:scale(.85);}50%{transform:scale(1.1);}}
+
+/* manage habits list */
+.manage-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+.manage-row input{flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 11px; color:var(--text); font-size:13px;}
+.manage-row button{background:rgba(244,135,156,.12); color:var(--rose); border:1px solid rgba(244,135,156,.3); border-radius:8px; width:32px; height:32px; flex:none; cursor:pointer;}
+
+select{background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--text); font-size:13px; font-family:'Inter';}
