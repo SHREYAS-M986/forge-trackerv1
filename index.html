@@ -59,18 +59,15 @@
           <div class="stat-num mono" id="ratingNum">—</div>
           <div class="stat-label">today's rating</div>
         </div>
+        <div class="stat hidden" id="stepsStatWrap">
+          <div class="stat-num mono" id="stepsStatNum">0</div>
+          <div class="stat-label">steps today</div>
+        </div>
       </div>
     </div>
 
     <h3 class="section-title">Today's daily habits</h3>
     <div class="card-list" id="todayHabits"></div>
-
-    <div id="stepsCardWrap" class="hidden">
-      <h3 class="section-title">Steps today</h3>
-      <div class="form-card">
-        <label>Steps walked<input type="number" id="stepsInput" inputmode="numeric" placeholder="e.g. 6500" /></label>
-      </div>
-    </div>
 
     <h3 class="section-title">Last 14 days</h3>
     <div class="chart-card"><canvas id="trendChart" height="160"></canvas></div>
@@ -113,11 +110,36 @@
   <!-- FITNESS -->
   <section class="view hidden" id="view-fitness" data-view-name="fitness">
     <div class="segmented" id="fitnessSeg">
-      <button class="seg-btn active" data-fseg="calisthenics">Calisthenics</button>
-      <button class="seg-btn" data-fseg="looksmaxing">Looksmaxing</button>
+      <button class="seg-btn active" data-fseg="today">Today</button>
+      <button class="seg-btn" data-fseg="library">Library</button>
     </div>
-    <p class="hint" id="fitnessHint"></p>
-    <div class="card-list" id="exerciseList"></div>
+
+    <div id="fseg-today">
+      <div class="workout-header">
+        <div class="workout-focus" id="workoutFocus">Push Day</div>
+        <div class="workout-meta" id="workoutMeta">Week 1 · Phase 1: Foundation</div>
+      </div>
+      <div class="rating-row" id="workoutRating"></div>
+
+      <div id="stepsCardWrap" class="hidden">
+        <h3 class="section-title">Steps today</h3>
+        <div class="form-card">
+          <label>Steps walked<input type="number" id="stepsInput" inputmode="numeric" placeholder="e.g. 6500" /></label>
+        </div>
+      </div>
+
+      <h3 class="section-title">Exercises</h3>
+      <div class="card-list" id="todayExerciseList"></div>
+    </div>
+
+    <div id="fseg-library" class="hidden">
+      <div class="segmented" id="librarySeg">
+        <button class="seg-btn active" data-lseg="calisthenics">Calisthenics</button>
+        <button class="seg-btn" data-lseg="looksmaxing">Looksmaxing</button>
+      </div>
+      <p class="hint" id="fitnessHint"></p>
+      <div class="card-list" id="exerciseList"></div>
+    </div>
   </section>
 
   <!-- ANALYTICS -->
@@ -308,6 +330,7 @@
 </nav>
 
 <script src="chart.min.js"></script>
+<script src="workout-plan.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

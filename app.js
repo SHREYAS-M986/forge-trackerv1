@@ -101,6 +101,7 @@ const DEFAULT_STATE = () => ({
   monthlyLogs: {},
   weightLogs: {},     // weekIndex -> {date, weight}
   stepLogs: {},        // "YYYY-MM-DD" -> steps
+  workoutLogs: {},     // "YYYY-MM-DD" -> { "<exerciseIndex>": [bool,...] }
   money: { initialBalance: 0 },
   goals: [],
   learn: [],
@@ -141,6 +142,30 @@ function monthNumFromName(name){
   return ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(name);
 }
 function weekIndexOf(d){ return Math.min(Math.max(Math.floor(dayIndexInYear(d)/7),0), 51); }
+
+/* ---- Workout program week/day helpers ---- */
+function mondayOnOrBefore(d){
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day===0) ? 6 : day-1;
+  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate()-diff);
+  return m;
+}
+const PROGRAM_START_MONDAY = mondayOnOrBefore(YEAR_START);
+function programWeekIndex(d){
+  const diffDays = Math.floor((d - PROGRAM_START_MONDAY) / 86400000);
+  const w = Math.floor(diffDays/7) + 1;
+  return Math.min(Math.max(w,1), 52);
+}
+function programDayName(d){
+  return WORKOUT_DAYS_ORDER[(d.getDay()+6)%7]; // convert JS Sun=0..Sat=6 to Mon-first index
+}
+function todaysWorkout(){
+  const d = new Date();
+  const w = programWeekIndex(d);
+  const dayIdx = (d.getDay()+6)%7;
+  return WORKOUT_PLAN[w-1][dayIdx];
+}
+
 function quoteForToday(){
   const idx = ((dayIndexInYear(new Date()) % QUOTES.length) + QUOTES.length) % QUOTES.length;
   return QUOTES[idx];
@@ -284,11 +309,9 @@ function renderHome(){
     list.appendChild(card);
   });
 
-  const stepsWrap = document.getElementById("stepsCardWrap");
+  const stepsWrap = document.getElementById("stepsStatWrap");
   stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
-  if(state.settings.stepsOn){
-    document.getElementById("stepsInput").value = state.stepLogs[key] || "";
-  }
+  document.getElementById("stepsStatNum").textContent = state.stepLogs[key] || 0;
 
   renderTrendChart();
   maybePromptWeight();
@@ -466,20 +489,105 @@ function renderMonthly(){
 }
 
 /* ---------- FITNESS ---------- */
-let fitnessSeg = "calisthenics";
+let fitnessSeg = "today";
+let librarySeg = "calisthenics";
+
 document.querySelectorAll("#fitnessSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
     document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     fitnessSeg = b.dataset.fseg;
+    document.getElementById("fseg-today").classList.toggle("hidden", fitnessSeg!=="today");
+    document.getElementById("fseg-library").classList.toggle("hidden", fitnessSeg!=="library");
     renderFitness();
   });
 });
+document.querySelectorAll("#librarySeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#librarySeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    librarySeg = b.dataset.lseg;
+    renderLibrary();
+  });
+});
+
 function renderFitness(){
+  if(fitnessSeg==="today") renderTodayWorkout();
+  else renderLibrary();
+}
+
+function renderTodayWorkout(){
+  const w = programWeekIndex(new Date());
+  const day = todaysWorkout();
+  document.getElementById("workoutFocus").textContent = day.focus;
+  document.getElementById("workoutMeta").textContent = `Week ${w} of 52 · ${day.phase}`;
+
+  const stepsWrap = document.getElementById("stepsCardWrap");
+  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
+  if(state.settings.stepsOn){
+    document.getElementById("stepsInput").value = state.stepLogs[todayKey()] || "";
+  }
+
+  const key = todayKey();
+  const log = state.workoutLogs[key] || {};
+  const list = document.getElementById("todayExerciseList");
+  list.innerHTML = "";
+
+  let totalSets=0, doneSets=0;
+
+  day.exercises.forEach((ex, exIdx)=>{
+    const setsTarget = (typeof ex.sets === "number") ? ex.sets : 1;
+    const exLog = log[exIdx] || Array(setsTarget).fill(false);
+    const doneCount = exLog.filter(Boolean).length;
+    totalSets += setsTarget; doneSets += doneCount;
+    const allDone = doneCount >= setsTarget;
+
+    const card = document.createElement("div");
+    card.className = "workout-exercise-card" + (allDone ? " complete" : "");
+    const pipsHtml = Array.from({length:setsTarget}).map((_,si)=>{
+      const on = !!exLog[si];
+      const label = (typeof ex.sets === "number") ? (si+1) : "✓";
+      return `<div class="set-pip ${on?"done":""}" data-ex="${exIdx}" data-set="${si}">${label}</div>`;
+    }).join("");
+    card.innerHTML = `
+      <div class="workout-ex-top">
+        <div>
+          <div class="workout-ex-name">${escapeHtml(ex.name)}</div>
+          <div class="workout-ex-target">${typeof ex.sets==="number" ? ex.sets+" sets" : ""} ${ex.sets!=="-"?"×":""} ${escapeHtml(String(ex.reps))}</div>
+        </div>
+      </div>
+      <div class="set-pips">${pipsHtml}</div>`;
+    card.querySelectorAll(".set-pip").forEach(pip=>{
+      pip.addEventListener("click", ()=>{
+        const exI = +pip.dataset.ex, setI = +pip.dataset.set;
+        if(!state.workoutLogs[key]) state.workoutLogs[key] = {};
+        if(!state.workoutLogs[key][exI]) state.workoutLogs[key][exI] = Array(setsTarget).fill(false);
+        const turningOn = !state.workoutLogs[key][exI][setI];
+        state.workoutLogs[key][exI][setI] = turningOn;
+        saveState();
+        renderTodayWorkout();
+        if(turningOn && !state.settings.reduceMotion){
+          requestAnimationFrame(()=>{
+            const freshPip = list.querySelector(`.set-pip[data-ex="${exI}"][data-set="${setI}"]`);
+            if(freshPip){ freshPip.classList.add("pop"); setTimeout(()=>freshPip.classList.remove("pop"), 420); }
+          });
+        }
+      });
+    });
+    list.appendChild(card);
+  });
+
+  const pct = totalSets ? doneSets/totalSets : 0;
+  const r = ratingLabel(pct);
+  document.getElementById("workoutRating").innerHTML =
+    `<span>Today's progress: <b class="mono">${doneSets}/${totalSets} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
+}
+
+function renderLibrary(){
   const list = document.getElementById("exerciseList");
   const hint = document.getElementById("fitnessHint");
-  const data = fitnessSeg==="calisthenics" ? CALISTHENICS : LOOKSMAXING;
-  hint.textContent = fitnessSeg==="calisthenics"
+  const data = librarySeg==="calisthenics" ? CALISTHENICS : LOOKSMAXING;
+  hint.textContent = librarySeg==="calisthenics"
     ? "Bodyweight strength moves. Motion icons show the movement pattern — push, pull, squat, hinge, hold or stretch."
     : "Posture, jaw and physique-aesthetic focused moves. Facial-exercise research is limited — treat these as posture/muscle-tone habits, not guaranteed structural change.";
   list.innerHTML = "";
@@ -500,6 +608,16 @@ function renderFitness(){
     });
     list.appendChild(card);
   });
+}
+document.getElementById("stepsInput").addEventListener("input", (e)=>{
+  state.stepLogs[todayKey()] = +e.target.value || 0;
+  saveState();
+  updateHomeStepsStat();
+});
+function updateHomeStepsStat(){
+  const wrap = document.getElementById("stepsStatWrap");
+  wrap.classList.toggle("hidden", !state.settings.stepsOn);
+  document.getElementById("stepsStatNum").textContent = state.stepLogs[todayKey()] || 0;
 }
 
 /* ---------- ANALYTICS ---------- */
