@@ -102,13 +102,14 @@ const DEFAULT_STATE = () => ({
   weightLogs: {},     // weekIndex -> {date, weight}
   stepLogs: {},        // "YYYY-MM-DD" -> steps
   workoutLogs: {},     // "YYYY-MM-DD" -> { "<exerciseIndex>": [bool,...] }
+  tasks: [],           // {id, title, dueDate, notes, done, lastNotifiedDate}
   money: { initialBalance: 0 },
   goals: [],
   learn: [],
   settings: {
-    notifOn:false, reminderTime:"20:00",
+    notifOn:false, reminderTime:"20:00", taskNotifOn:true,
     stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
-    reduceMotion:false,
+    reduceMotion:false, theme:"classic",
   },
 });
 
@@ -125,6 +126,7 @@ function loadState(){
 function saveState(){ localStorage.setItem("forgeData", JSON.stringify(state)); }
 
 if(state.settings.reduceMotion) document.body.classList.add("reduce-motion");
+if(state.settings.theme && state.settings.theme!=="classic") document.body.classList.add("theme-"+state.settings.theme);
 
 /* ---------- Date helpers ---------- */
 function fmtDate(d){ return d.toISOString().slice(0,10); }
@@ -208,7 +210,7 @@ document.querySelectorAll(".sheet-item").forEach(btn=>{
 });
 
 /* ---------- Navigation with slide transition ---------- */
-const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","settings"];
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","crew","settings"];
 function showView(name){
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
   const target = document.getElementById("view-"+name);
@@ -240,6 +242,8 @@ function runViewRenderer(name){
   if(name==="money") renderMoney();
   if(name==="goals") renderGoals();
   if(name==="learn") renderLearn();
+  if(name==="calendar") renderCalendar();
+  if(name==="crew") renderCrew();
   if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
@@ -865,7 +869,175 @@ function renderLearn(){
   });
 }
 
-/* ---------- MANAGE HABITS (Settings) ---------- */
+/* ---------- CALENDAR ---------- */
+let calMonthIdx = monthIndexOf(new Date());
+let calSelectedDate = todayKey();
+
+document.getElementById("prevCalMonth").addEventListener("click", ()=>{ calMonthIdx=(calMonthIdx+11)%12; renderCalendar(); });
+document.getElementById("nextCalMonth").addEventListener("click", ()=>{ calMonthIdx=(calMonthIdx+1)%12; renderCalendar(); });
+
+document.getElementById("addTaskBtn").addEventListener("click", ()=>{
+  const title = document.getElementById("taskTitleInput").value.trim();
+  const due = document.getElementById("taskDateInput").value;
+  const notes = document.getElementById("taskNotesInput").value.trim();
+  if(!title){ toast("Enter a task title"); return; }
+  if(!due){ toast("Pick a due date"); return; }
+  state.tasks.push({ id: Date.now()+"", title, dueDate: due, notes, done:false, lastNotifiedDate:null });
+  saveState();
+  document.getElementById("taskTitleInput").value = "";
+  document.getElementById("taskDateInput").value = "";
+  document.getElementById("taskNotesInput").value = "";
+  toast("Task added");
+  calSelectedDate = due;
+  calMonthIdx = monthIndexOf(new Date(due));
+  renderCalendar();
+});
+
+function tasksOnDate(dateKey){ return state.tasks.filter(t => t.dueDate === dateKey); }
+
+function renderCalendar(){
+  const m = MONTHS[calMonthIdx];
+  document.getElementById("calMonthLabel").textContent = `${m.name} ${m.year}`;
+  const start = monthStartDate(calMonthIdx);
+  const leading = (start.getDay()+6)%7; // Monday-first offset
+  const grid = document.getElementById("calGrid");
+  grid.innerHTML = "";
+  ["Mo","Tu","We","Th","Fr","Sa","Su"].forEach(d=>{
+    const el = document.createElement("div");
+    el.className = "cal-dow"; el.textContent = d;
+    grid.appendChild(el);
+  });
+  for(let i=0;i<leading;i++){
+    const el = document.createElement("div");
+    el.className = "cal-day empty";
+    grid.appendChild(el);
+  }
+  const todayStr = todayKey();
+  for(let d=1; d<=m.days; d++){
+    const dateObj = new Date(start.getFullYear(), start.getMonth(), d);
+    const key = fmtDate(dateObj);
+    const hasTasks = tasksOnDate(key).length > 0;
+    const el = document.createElement("div");
+    el.className = "cal-day" + (key===todayStr?" today":"") + (key===calSelectedDate?" selected":"");
+    el.innerHTML = `${d}${hasTasks?'<span class="dot"></span>':""}`;
+    el.addEventListener("click", ()=>{ calSelectedDate = key; renderCalendar(); });
+    grid.appendChild(el);
+  }
+
+  const isToday = calSelectedDate === todayStr;
+  document.getElementById("calSelectedLabel").textContent = isToday ? "Today" :
+    new Date(calSelectedDate).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"});
+  renderTaskCards("calDayTasks", tasksOnDate(calSelectedDate), true);
+
+  const upcoming = state.tasks
+    .filter(t=>!t.done && t.dueDate >= todayStr)
+    .sort((a,b)=> a.dueDate.localeCompare(b.dueDate))
+    .slice(0,5);
+  renderTaskCards("calUpcoming", upcoming, false);
+}
+
+function renderTaskCards(containerId, tasks, showEmpty){
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = "";
+  if(tasks.length===0){
+    if(showEmpty) wrap.innerHTML = `<p class="hint">Nothing due this day.</p>`;
+    else wrap.innerHTML = `<p class="hint">Nothing upcoming — you're clear.</p>`;
+    return;
+  }
+  const todayStr = todayKey();
+  tasks.forEach(t=>{
+    const overdue = !t.done && t.dueDate < todayStr;
+    const card = document.createElement("div");
+    card.className = "task-card" + (t.done?" done":"") + (overdue?" overdue":"");
+    card.innerHTML = `
+      <div>
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta">${new Date(t.dueDate).toLocaleDateString(undefined,{day:"numeric",month:"short"})}${overdue?" · Overdue":""}</div>
+        ${t.notes?`<div class="task-notes">${escapeHtml(t.notes)}</div>`:""}
+      </div>
+      <div class="task-actions">
+        <button class="task-icon-btn" data-act="toggle">${t.done?"↺":"✓"}</button>
+        <button class="task-icon-btn" data-act="del">✕</button>
+      </div>`;
+    card.querySelector('[data-act="toggle"]').addEventListener("click", ()=>{
+      t.done = !t.done; saveState(); renderCalendar();
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      if(confirm("Delete this task?")){
+        state.tasks = state.tasks.filter(x=>x.id!==t.id);
+        saveState(); renderCalendar();
+      }
+    });
+    wrap.appendChild(card);
+  });
+}
+
+function checkTaskReminders(){
+  if(!state.settings.taskNotifOn) return;
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  const todayStr = todayKey();
+  let changed=false;
+  state.tasks.forEach(t=>{
+    if(t.done) return;
+    if(t.lastNotifiedDate===todayStr) return;
+    if(t.dueDate < todayStr){
+      new Notification("One Piece — Task overdue", {body:`"${t.title}" was due ${t.dueDate}.`, icon:"icons/icon-192.png"});
+      t.lastNotifiedDate = todayStr; changed=true;
+    } else if(t.dueDate === todayStr){
+      new Notification("One Piece — Task due today", {body:`"${t.title}" is due today.`, icon:"icons/icon-192.png"});
+      t.lastNotifiedDate = todayStr; changed=true;
+    } else {
+      const daysUntil = Math.round((new Date(t.dueDate) - new Date(todayStr))/86400000);
+      if(daysUntil===1){
+        new Notification("One Piece — Task due tomorrow", {body:`"${t.title}" is due tomorrow.`, icon:"icons/icon-192.png"});
+        t.lastNotifiedDate = todayStr; changed=true;
+      }
+    }
+  });
+  if(changed) saveState();
+}
+
+/* ---------- CREW / CHARACTERS ---------- */
+const CREW = [
+  {name:"Monkey D. Luffy", role:"Captain — Straw Hat Pirates", blurb:"Rubber-powered, fearless, endlessly hungry — leads by refusing to give up on anyone.", img:"characters/luffy.jpg", bounty:"3,000,000,000"},
+  {name:"Roronoa Zoro", role:"First Mate / Swordsman", blurb:"Three blades, one goal: become the greatest swordsman alive.", img:"characters/zoro.jpg", bounty:"320,000,000"},
+  {name:"Nami", role:"Navigator", blurb:"Reads the sea like nobody else, and never forgets a debt.", img:"characters/nami.jpg", bounty:"366,000,000"},
+  {name:"Usopp", role:"Sniper", blurb:"Braver than he lets on, with an aim nobody can match.", img:"characters/usopp.jpg", bounty:"500,000,000"},
+  {name:"Vinsmoke Sanji", role:"Chef", blurb:"Fights with his legs so his hands stay ready to cook.", img:"characters/sanji.jpg", bounty:"1,032,000,000"},
+  {name:"Tony Tony Chopper", role:"Doctor", blurb:"Small in size, huge in heart — wanted to be human, became everyone's friend.", img:"characters/chopper.jpg", bounty:"1,000"},
+  {name:"Nico Robin", role:"Archaeologist", blurb:"Carries the weight of history so the crew can shape the future.", img:"characters/robin.jpg", bounty:"930,000,000"},
+  {name:"Franky", role:"Shipwright", blurb:"Builds dreams out of steel — SUPER, in his own words.", img:"characters/franky.jpg", bounty:"394,000,000"},
+  {name:"Brook", role:"Musician", blurb:"A promise kept across decades, set to music.", img:"characters/brook.jpg", bounty:"383,000,000"},
+  {name:"Jinbe", role:"Helmsman", blurb:"Guards the crew's path from beneath the waves.", img:"characters/jinbe.jpg", bounty:"1,100,000,000"},
+  {name:"Shanks", role:"Yonko — Red Hair Pirates", blurb:"The man who gave up an arm, and gave Luffy a hat and a dream.", img:"characters/shanks.jpg", bounty:"4,048,900,000"},
+  {name:"Monkey D. Garp", role:"Marine Hero — \"The Fist\"", blurb:"Could have caught the greatest pirates of his era. Chose to raise a grandson instead.", img:"characters/garp.jpg", bounty:null},
+];
+function renderCrew(){
+  const wrap = document.getElementById("crewList");
+  wrap.innerHTML = "";
+  CREW.forEach(c=>{
+    const card = document.createElement("div");
+    card.className = "crew-card";
+    card.innerHTML = `
+      <div class="crew-avatar">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6.2 7-6.2s7 2.7 7 6.2"/></svg>
+      </div>
+      <div class="crew-info">
+        <div class="crew-name">${escapeHtml(c.name)}</div>
+        <div class="crew-role">${escapeHtml(c.role)}</div>
+        <div class="crew-blurb">${escapeHtml(c.blurb)}</div>
+        ${c.bounty ? `<div class="crew-bounty">฿ ${c.bounty}</div>` : `<div class="crew-bounty">No bounty — Marine</div>`}
+      </div>`;
+    const avatarEl = card.querySelector(".crew-avatar");
+    const img = new Image();
+    img.onload = ()=>{ avatarEl.innerHTML = ""; avatarEl.appendChild(img); };
+    img.onerror = ()=>{ /* keep placeholder silhouette */ };
+    img.src = c.img;
+    wrap.appendChild(card);
+  });
+}
+
+
 let manageSeg = "daily";
 document.querySelectorAll("#manageSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
@@ -914,12 +1086,30 @@ document.getElementById("addHabitBtn").addEventListener("click", ()=> addHabit(m
 function renderSettings(){
   document.getElementById("notifToggle").checked = state.settings.notifOn;
   document.getElementById("reminderTime").value = state.settings.reminderTime;
+  document.getElementById("taskNotifToggle").checked = state.settings.taskNotifOn;
   document.getElementById("stepsToggle").checked = state.settings.stepsOn;
   document.getElementById("weightToggle").checked = state.settings.weightOn;
   document.getElementById("weightDaySelect").value = String(state.settings.weightDay);
   document.getElementById("motionToggle").checked = state.settings.reduceMotion;
+  document.querySelectorAll(".theme-swatch").forEach(el=>{
+    el.classList.toggle("active", el.dataset.theme === (state.settings.theme||"classic"));
+  });
   renderManageList();
 }
+document.querySelectorAll(".theme-swatch").forEach(el=>{
+  el.addEventListener("click", ()=>{
+    const t = el.dataset.theme;
+    state.settings.theme = t;
+    saveState();
+    document.body.classList.remove("theme-crimson","theme-ocean","theme-onepiece");
+    if(t!=="classic") document.body.classList.add("theme-"+t);
+    document.querySelectorAll(".theme-swatch").forEach(x=>x.classList.toggle("active", x===el));
+    toast("Theme updated");
+  });
+});
+document.getElementById("taskNotifToggle").addEventListener("change", (e)=>{
+  state.settings.taskNotifOn = e.target.checked; saveState();
+});
 
 document.getElementById("notifToggle").addEventListener("change", async (e)=>{
   if(e.target.checked){
@@ -962,11 +1152,11 @@ function checkReminderLoop(){
     const log = state.dailyLogs[todayKey()];
     const done = log && log.some(Boolean);
     if(!done && Notification.permission==="granted"){
-      new Notification("Forge — Daily reminder", { body:"You haven't logged today's habits yet. Open Forge to check in.", icon:"icons/icon-192.png" });
+      new Notification("One Piece — Daily reminder", { body:"You haven't logged today's habits yet. Open One Piece to check in.", icon:"icons/icon-192.png" });
     }
   }
 }
-setInterval(checkReminderLoop, 60000);
+setInterval(()=>{ checkReminderLoop(); checkTaskReminders(); }, 60000);
 
 document.getElementById("exportBtn").addEventListener("click", ()=>{
   const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
@@ -1063,3 +1253,4 @@ if("serviceWorker" in navigator){
 
 /* ---------- Init ---------- */
 renderHome();
+checkTaskReminders();

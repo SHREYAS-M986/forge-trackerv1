@@ -1,7 +1,11 @@
-const CACHE = "forge-cache-v5";
+const CACHE = "forge-cache-v7";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./chart.min.js", "./workout-plan.js", "./manifest.json",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png",
+  "./characters/luffy.jpg", "./characters/zoro.jpg", "./characters/nami.jpg", "./characters/usopp.jpg",
+  "./characters/sanji.jpg", "./characters/chopper.jpg", "./characters/robin.jpg", "./characters/franky.jpg",
+  "./characters/brook.jpg", "./characters/jinbe.jpg", "./characters/shanks.jpg", "./characters/garp.jpg",
+  "./characters/bg-home.jpg", "./characters/banner-crew.jpg"
 ];
 
 self.addEventListener("install", (e) => {
