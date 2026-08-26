@@ -137,6 +137,18 @@ main{padding:0 18px 40px;}
 
 .section-title{font-size:14px; font-weight:700; margin:22px 0 10px; color:var(--text); letter-spacing:.3px;}
 
+/* perfect day badge */
+.perfect-day-card{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:linear-gradient(135deg, rgba(249,199,79,.12), rgba(201,166,247,.08));
+  border:1px solid rgba(249,199,79,.35); border-radius:16px; padding:14px 16px; margin-bottom:6px;
+}
+.perfect-day-left{display:flex; align-items:center; gap:10px;}
+.perfect-day-star{font-size:22px;}
+.perfect-day-title{font-weight:700; font-size:13px;}
+.perfect-day-sub{font-size:11px; color:var(--muted); margin-top:1px;}
+.perfect-day-streak{font-family:'JetBrains Mono'; font-weight:800; font-size:20px; color:var(--gold);}
+
 .card-list{display:flex; flex-direction:column; gap:10px;}
 .habit-card{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -193,6 +205,7 @@ main{padding:0 18px 40px;}
 .pill-good{background:rgba(201,166,247,.15); color:var(--mauve);}
 .pill-fair{background:rgba(249,199,79,.15); color:var(--gold);}
 .pill-poor,.pill-verypoor{background:rgba(244,135,156,.15); color:var(--rose);}
+.pill-neutral{background:var(--surface3); color:var(--muted);}
 
 .form-card{
   background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
@@ -347,6 +360,26 @@ body.reduce-motion *{animation-duration:.01ms !important; transition-duration:.0
 
 select{background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--text); font-size:13px; font-family:'Inter';}
 
+/* expenses */
+.expense-row{
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.expense-row select{flex:1.1; min-width:0;}
+.expense-row input[type=number]{width:90px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:9px 10px; color:var(--text); font-family:'JetBrains Mono'; font-size:13px;}
+.expense-row button{background:rgba(244,135,156,.12); color:var(--rose); border:1px solid rgba(244,135,156,.3); border-radius:8px; width:32px; height:32px; flex:none; cursor:pointer;}
+.chip-row{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
+.chip{
+  background:var(--surface2); border:1px solid var(--border); border-radius:100px; padding:6px 10px 6px 12px;
+  font-size:12px; display:flex; align-items:center; gap:6px; color:var(--text);
+}
+.chip button{background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0; line-height:1;}
+
+/* budget overview (goals) */
+.budget-card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px;}
+.budget-row{display:flex; justify-content:space-between; font-size:12px; color:var(--muted); padding:4px 0;}
+.budget-row b{color:var(--text); font-family:'JetBrains Mono';}
+
 /* theme picker */
 .theme-swatches{display:flex; gap:12px;}
 .theme-swatch{flex:1; border-radius:14px; padding:14px 10px; text-align:center; cursor:pointer; border:2px solid var(--border); transition: all .2s var(--ease); background:var(--surface2);}
@@ -372,35 +405,27 @@ select{background:var(--surface2); border:1px solid var(--border); border-radius
 .task-card.done{opacity:.5;}
 .task-card.overdue{border-color:rgba(244,135,156,.5);}
 .task-title{font-weight:700; font-size:14px;}
+.task-recur-badge{font-size:9px; font-weight:700; color:var(--mauve); background:var(--surface2); border-radius:100px; padding:2px 7px; vertical-align:middle; margin-left:4px;}
 .task-meta{font-size:11px; color:var(--muted); margin-top:3px;}
 .task-notes{font-size:12px; margin-top:6px; color:var(--text);}
 .task-actions{display:flex; gap:6px; flex:none;}
 .task-icon-btn{width:30px; height:30px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text); cursor:pointer; display:flex; align-items:center; justify-content:center;}
 
-/* crew / characters — wanted poster style */
-.crew-banner{width:100%; border-radius:16px; overflow:hidden; margin-bottom:12px; max-height:160px;}
-.crew-banner img{width:100%; height:160px; object-fit:cover; display:block; filter:saturate(1.05);}
-.crew-card{
-  background: var(--surface); border:1px solid var(--border); border-radius:14px;
-  padding:12px; display:flex; gap:14px; align-items:center;
-}
-body.theme-onepiece .crew-card{
-  background: linear-gradient(160deg, #EFE3C8, #E4D3AC);
-  border:1px solid #8a7550; color:#241a10;
-}
-.crew-avatar{width:64px; height:80px; border-radius:8px; background:var(--surface2); border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; flex:none; overflow:hidden;}
-.crew-avatar img{width:100%; height:100%; object-fit:cover; object-position:top center;}
-.crew-info{flex:1; min-width:0;}
-.crew-name{font-weight:700; font-size:14px;}
-body.theme-onepiece .crew-name{font-family:'Rye',serif; font-size:15px; letter-spacing:.3px; color:#241a10;}
-.crew-role{font-size:11px; color:var(--gold); margin-top:1px;}
-body.theme-onepiece .crew-role{color:#6b4a1f;}
-.crew-blurb{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.4;}
-body.theme-onepiece .crew-blurb{color:#4a3c28;}
-.crew-bounty{font-family:'JetBrains Mono'; font-size:12px; font-weight:700; margin-top:5px; color:var(--gold);}
-body.theme-onepiece .crew-bounty{color:#8a1f1f;}
-
 /* today's workout */
+.viewing-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:rgba(249,199,79,.1); border:1px solid rgba(249,199,79,.35); border-radius:12px;
+  padding:10px 14px; margin-bottom:12px; font-size:12px; font-weight:600; color:var(--gold);
+}
+.workout-status-row{display:flex; justify-content:flex-end; margin-bottom:12px;}
+.history-row{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 16px; cursor:pointer;
+  transition: background .2s;
+}
+.history-row:active{background:var(--surface2);}
+.history-date{font-weight:700; font-size:13px;}
+.history-focus{font-size:11px; color:var(--muted); margin-top:2px;}
 .workout-header{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:12px;}
 .workout-focus{font-family:'Sora'; font-weight:700; font-size:17px; color:var(--gold);}
 .workout-meta{font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.4px;}

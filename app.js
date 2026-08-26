@@ -102,8 +102,11 @@ const DEFAULT_STATE = () => ({
   weightLogs: {},     // weekIndex -> {date, weight}
   stepLogs: {},        // "YYYY-MM-DD" -> steps
   workoutLogs: {},     // "YYYY-MM-DD" -> { "<exerciseIndex>": [bool,...] }
-  tasks: [],           // {id, title, dueDate, notes, done, lastNotifiedDate}
-  money: { initialBalance: 0 },
+  workoutStatus: {},   // "YYYY-MM-DD" -> {type:"skipped"} | {type:"makeup", loggedOn:"YYYY-MM-DD"}
+  bodyLogs: [],         // [{id, date, weight, waist}] — dedicated Fitness body-log entries (separate from weekly weightLogs)
+  tasks: [],           // {id, title, dueDate, notes, done, lastNotifiedDate, recurrence?, seriesId?}
+  money: { initialBalance: 0 },   // per-month entries: money[i] = {income, fixed, expenses:[{id,category,amount,note}]}
+  expenseCategories: ["Food","Transport","Subscriptions","Misc"],
   goals: [],
   learn: [],
   settings: {
@@ -161,11 +164,66 @@ function programWeekIndex(d){
 function programDayName(d){
   return WORKOUT_DAYS_ORDER[(d.getDay()+6)%7]; // convert JS Sun=0..Sat=6 to Mon-first index
 }
-function todaysWorkout(){
-  const d = new Date();
+function todaysWorkout(){ return getWorkoutForDate(new Date()); }
+function getWorkoutForDate(d){
   const w = programWeekIndex(d);
   const dayIdx = (d.getDay()+6)%7;
   return WORKOUT_PLAN[w-1][dayIdx];
+}
+
+/* ---- Workout day status: done / partial / missed / skipped / makeup / future / today-pending ---- */
+function workoutSetsProgress(dateKey){
+  const day = getWorkoutForDate(new Date(dateKey));
+  const log = state.workoutLogs[dateKey] || {};
+  let total=0, done=0;
+  day.exercises.forEach((ex, exIdx)=>{
+    const setsTarget = (typeof ex.sets === "number") ? ex.sets : 1;
+    const exLog = log[exIdx] || [];
+    total += setsTarget;
+    done += exLog.filter(Boolean).length;
+  });
+  return {total, done, day};
+}
+function workoutDayStatus(dateKey){
+  const rec = state.workoutStatus[dateKey];
+  const today = todayKey();
+  const {total, done} = workoutSetsProgress(dateKey);
+  if(rec && rec.type==="skipped") return "skipped";
+  if(rec && rec.type==="makeup"){
+    if(total>0 && done>=total) return "makeup";
+    if(done>0) return "makeup-partial";
+    return dateKey<today ? "missed" : "future";
+  }
+  if(total>0 && done>=total) return "done";
+  if(done>0) return dateKey===today ? "today-pending" : (dateKey<today ? "partial" : "future");
+  if(dateKey===today) return "today-pending";
+  if(dateKey<today) return "missed";
+  return "future";
+}
+function workoutStatusMeta(status){
+  const map = {
+    done:        {label:"Done",       cls:"pill-excellent"},
+    makeup:      {label:"Made up",    cls:"pill-good"},
+    "makeup-partial": {label:"Make-up in progress", cls:"pill-fair"},
+    partial:     {label:"Partial",    cls:"pill-fair"},
+    skipped:     {label:"Skipped",    cls:"pill-neutral"},
+    missed:      {label:"Missed",     cls:"pill-poor"},
+    "today-pending": {label:"Today",  cls:"pill-neutral"},
+    future:      {label:"Upcoming",   cls:"pill-neutral"},
+  };
+  return map[status] || {label:status, cls:"pill-neutral"};
+}
+function computeFitnessStreak(){
+  let streak=0;
+  let d = new Date();
+  while(true){
+    const key = fmtDate(d);
+    const status = workoutDayStatus(key);
+    if(status==="done" || status==="makeup"){ streak++; d.setDate(d.getDate()-1); }
+    else if(status==="skipped" || status==="today-pending"){ d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
 }
 
 function quoteForToday(){
@@ -178,6 +236,20 @@ function ratingLabel(pct){
   if(pct>=0.5) return {label:"Fair", cls:"pill-fair"};
   if(pct>=0.25) return {label:"Poor", cls:"pill-poor"};
   return {label:"Very Poor", cls:"pill-verypoor"};
+}
+
+/* Effective monthly variable-expense total: itemized `expenses` array if present, else legacy flat `variable` number */
+function monthExpensesTotal(entry){
+  if(!entry) return 0;
+  if(Array.isArray(entry.expenses) && entry.expenses.length>0){
+    return entry.expenses.reduce((s,x)=> s+(x.amount||0), 0);
+  }
+  return entry.variable || 0;
+}
+function monthSavings(i){
+  const e = state.money[i];
+  if(!e) return 0;
+  return (e.income||0) - (e.fixed||0) - monthExpensesTotal(e);
 }
 
 /* ---------- Toast ---------- */
@@ -210,7 +282,7 @@ document.querySelectorAll(".sheet-item").forEach(btn=>{
 });
 
 /* ---------- Navigation with slide transition ---------- */
-const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","crew","settings"];
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","settings"];
 function showView(name){
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
   const target = document.getElementById("view-"+name);
@@ -243,7 +315,6 @@ function runViewRenderer(name){
   if(name==="goals") renderGoals();
   if(name==="learn") renderLearn();
   if(name==="calendar") renderCalendar();
-  if(name==="crew") renderCrew();
   if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
@@ -317,8 +388,25 @@ function renderHome(){
   stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
   document.getElementById("stepsStatNum").textContent = state.stepLogs[key] || 0;
 
+  renderPerfectDayCard();
   renderTrendChart();
   maybePromptWeight();
+}
+
+function renderPerfectDayCard(){
+  const key = todayKey();
+  const perfect = isPerfectDay(key);
+  const streak = computePerfectStreak();
+  const card = document.getElementById("perfectDayCard");
+  card.innerHTML = `
+    <div class="perfect-day-left">
+      <div class="perfect-day-star">${perfect ? "🌟" : "⭐"}</div>
+      <div>
+        <div class="perfect-day-title">${perfect ? "Perfect Day!" : "Perfect Day — not yet"}</div>
+        <div class="perfect-day-sub">All habits + workout${state.settings.stepsOn?" + steps":""}</div>
+      </div>
+    </div>
+    <div class="perfect-day-streak">${streak}</div>`;
 }
 
 function computeStreak(){
@@ -331,6 +419,41 @@ function computeStreak(){
     else break;
   }
   return streak;
+}
+
+/* ---- Perfect Day: all daily habits + workout done + steps logged (if enabled) ---- */
+function isPerfectDay(dateKey){
+  const dailyLog = state.dailyLogs[dateKey] || [];
+  const totalHabits = state.habits.daily.length;
+  const allHabitsDone = totalHabits>0 && dailyLog.filter(Boolean).length === totalHabits;
+  const wStatus = workoutDayStatus(dateKey);
+  const workoutDone = wStatus==="done" || wStatus==="makeup";
+  let stepsOk = true;
+  if(state.settings.stepsOn){
+    stepsOk = !!(state.stepLogs[dateKey] && state.stepLogs[dateKey] > 0);
+  }
+  return allHabitsDone && workoutDone && stepsOk;
+}
+function computePerfectStreak(){
+  let streak=0;
+  let d = new Date();
+  while(true){
+    const key = fmtDate(d);
+    if(isPerfectDay(key)){ streak++; d.setDate(d.getDate()-1); }
+    else if(key===todayKey()){ d.setDate(d.getDate()-1); } // today not yet perfect — don't break, just don't count
+    else break;
+  }
+  return streak;
+}
+function countPerfectDaysYTD(){
+  let count=0;
+  const todayStr = todayKey();
+  let d = new Date(YEAR_START);
+  while(fmtDate(d) <= todayStr){
+    if(isPerfectDay(fmtDate(d))) count++;
+    d.setDate(d.getDate()+1);
+  }
+  return count;
 }
 
 function renderTrendChart(){
@@ -495,14 +618,16 @@ function renderMonthly(){
 /* ---------- FITNESS ---------- */
 let fitnessSeg = "today";
 let librarySeg = "calisthenics";
+let fitnessViewDate = todayKey();
 
 document.querySelectorAll("#fitnessSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
     document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     fitnessSeg = b.dataset.fseg;
-    document.getElementById("fseg-today").classList.toggle("hidden", fitnessSeg!=="today");
-    document.getElementById("fseg-library").classList.toggle("hidden", fitnessSeg!=="library");
+    ["today","history","body","library"].forEach(s=>{
+      document.getElementById("fseg-"+s).classList.toggle("hidden", s!==fitnessSeg);
+    });
     renderFitness();
   });
 });
@@ -517,22 +642,39 @@ document.querySelectorAll("#librarySeg .seg-btn").forEach(b=>{
 
 function renderFitness(){
   if(fitnessSeg==="today") renderTodayWorkout();
+  else if(fitnessSeg==="history") renderWorkoutHistory();
+  else if(fitnessSeg==="body") renderBodyLog();
   else renderLibrary();
 }
 
 function renderTodayWorkout(){
-  const w = programWeekIndex(new Date());
-  const day = todaysWorkout();
+  const key = fitnessViewDate;
+  const dateObj = new Date(key);
+  const w = programWeekIndex(dateObj);
+  const day = getWorkoutForDate(dateObj);
   document.getElementById("workoutFocus").textContent = day.focus;
-  document.getElementById("workoutMeta").textContent = `Week ${w} of 52 · ${day.phase}`;
+  document.getElementById("workoutMeta").textContent = `Week ${w} of 52 · ${day.phase} · 🔥 ${computeFitnessStreak()} day streak`;
+
+  const isToday = key === todayKey();
+  const banner = document.getElementById("viewingDateBanner");
+  banner.classList.toggle("hidden", isToday);
+  if(!isToday){
+    document.getElementById("viewingDateLabel").textContent =
+      "Viewing " + new Date(key).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"});
+  }
 
   const stepsWrap = document.getElementById("stepsCardWrap");
-  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
-  if(state.settings.stepsOn){
+  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn || !isToday);
+  if(state.settings.stepsOn && isToday){
     document.getElementById("stepsInput").value = state.stepLogs[todayKey()] || "";
   }
 
-  const key = todayKey();
+  const status = workoutDayStatus(key);
+  const isPastIncomplete = key < todayKey() && (status==="missed" || status==="partial");
+  document.getElementById("makeupHint").textContent = isPastIncomplete
+    ? "This day is incomplete. Ticking sets below logs it as a make-up session."
+    : "";
+
   const log = state.workoutLogs[key] || {};
   const list = document.getElementById("todayExerciseList");
   list.innerHTML = "";
@@ -568,6 +710,13 @@ function renderTodayWorkout(){
         if(!state.workoutLogs[key][exI]) state.workoutLogs[key][exI] = Array(setsTarget).fill(false);
         const turningOn = !state.workoutLogs[key][exI][setI];
         state.workoutLogs[key][exI][setI] = turningOn;
+        // auto-flag as make-up: ticking a set on a past date that wasn't already skipped
+        if(turningOn && key < todayKey()){
+          const rec = state.workoutStatus[key];
+          if(!rec || rec.type!=="skipped"){
+            state.workoutStatus[key] = {type:"makeup", loggedOn: todayKey()};
+          }
+        }
         saveState();
         renderTodayWorkout();
         if(turningOn && !state.settings.reduceMotion){
@@ -582,9 +731,101 @@ function renderTodayWorkout(){
   });
 
   const pct = totalSets ? doneSets/totalSets : 0;
-  const r = ratingLabel(pct);
-  document.getElementById("workoutRating").innerHTML =
-    `<span>Today's progress: <b class="mono">${doneSets}/${totalSets} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
+  const freshStatus = workoutDayStatus(key);
+  if(freshStatus==="skipped"){
+    document.getElementById("workoutRating").innerHTML =
+      `<span>This session was skipped</span><span class="rating-pill pill-neutral">Skipped</span>`;
+  } else {
+    const r = ratingLabel(pct);
+    document.getElementById("workoutRating").innerHTML =
+      `<span>Progress: <b class="mono">${doneSets}/${totalSets} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
+  }
+  const sm = workoutStatusMeta(freshStatus);
+  document.getElementById("workoutStatusRow").innerHTML = `<span class="rating-pill ${sm.cls}">${sm.label}</span>`;
+
+  const skipBtn = document.getElementById("skipSessionBtn");
+  skipBtn.textContent = freshStatus==="skipped" ? "Unskip this session" : "Skip this session (rest / injury)";
+}
+
+document.getElementById("backToTodayBtn").addEventListener("click", ()=>{
+  fitnessViewDate = todayKey();
+  renderTodayWorkout();
+});
+document.getElementById("skipSessionBtn").addEventListener("click", ()=>{
+  const key = fitnessViewDate;
+  const current = state.workoutStatus[key];
+  if(current && current.type==="skipped"){
+    delete state.workoutStatus[key];
+    toast("Session unskipped");
+  } else {
+    state.workoutStatus[key] = {type:"skipped"};
+    toast("Marked as skipped — won't count against your streak or rating");
+  }
+  saveState();
+  renderTodayWorkout();
+});
+
+function renderWorkoutHistory(){
+  const wrap = document.getElementById("workoutHistoryList");
+  wrap.innerHTML = "";
+  const todayStr = todayKey();
+  for(let i=0; i<21; i++){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const key = fmtDate(d);
+    const day = getWorkoutForDate(d);
+    const status = workoutDayStatus(key);
+    const meta = workoutStatusMeta(status);
+    const row = document.createElement("div");
+    row.className = "history-row";
+    row.innerHTML = `
+      <div>
+        <div class="history-date">${key===todayStr?"Today":d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}</div>
+        <div class="history-focus">${escapeHtml(day.focus)}</div>
+      </div>
+      <span class="rating-pill ${meta.cls}">${meta.label}</span>`;
+    row.addEventListener("click", ()=>{
+      fitnessViewDate = key;
+      document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.toggle("active", x.dataset.fseg==="today"));
+      fitnessSeg = "today";
+      ["today","history","body","library"].forEach(s=>document.getElementById("fseg-"+s).classList.toggle("hidden", s!=="today"));
+      renderTodayWorkout();
+    });
+    wrap.appendChild(row);
+  }
+}
+
+/* ---- Body log (dedicated Fitness weight/measurement entry) ---- */
+document.getElementById("addBodyLogBtn").addEventListener("click", ()=>{
+  const weight = +document.getElementById("bodyWeightInput").value;
+  const waist = document.getElementById("bodyWaistInput").value ? +document.getElementById("bodyWaistInput").value : null;
+  if(!weight || weight<=0){ toast("Enter a valid weight"); return; }
+  state.bodyLogs.push({ id: Date.now()+"", date: todayKey(), weight, waist });
+  saveState();
+  document.getElementById("bodyWeightInput").value = "";
+  document.getElementById("bodyWaistInput").value = "";
+  toast("Logged");
+  renderBodyLog();
+});
+function renderBodyLog(){
+  const wrap = document.getElementById("bodyLogList");
+  wrap.innerHTML = "";
+  const entries = [...state.bodyLogs].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,15);
+  if(entries.length===0){ wrap.innerHTML = `<p class="hint">No entries yet.</p>`; return; }
+  entries.forEach(e=>{
+    const card = document.createElement("div");
+    card.className = "task-card";
+    card.innerHTML = `
+      <div>
+        <div class="task-title">${e.weight} kg${e.waist ? ` · ${e.waist} cm waist` : ""}</div>
+        <div class="task-meta">${new Date(e.date).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}</div>
+      </div>
+      <div class="task-actions"><button class="task-icon-btn" data-act="del">✕</button></div>`;
+    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      state.bodyLogs = state.bodyLogs.filter(x=>x.id!==e.id);
+      saveState(); renderBodyLog();
+    });
+    wrap.appendChild(card);
+  });
 }
 
 function renderLibrary(){
@@ -625,7 +866,7 @@ function updateHomeStepsStat(){
 }
 
 /* ---------- ANALYTICS ---------- */
-let monthlyChartInstance=null, weeklyTrendChartInstance=null, weightChartInstance=null, stepsChartInstance=null;
+let monthlyChartInstance=null, weeklyTrendChartInstance=null, weightChartInstance=null, stepsChartInstance=null, perfectDayChartInstance=null;
 function renderAnalytics(){
   const dailyTotal = state.habits.daily.length;
   let ytdDone=0, ytdPossible=0, monthPcts=[];
@@ -646,8 +887,10 @@ function renderAnalytics(){
   let bestIdx = monthPcts.reduce((best,v,i,arr)=> v>arr[best]?i:best, 0);
   document.getElementById("anaBestMonth").textContent = monthPcts[bestIdx]>0 ? MONTHS[bestIdx].name.slice(0,3) : "—";
   document.getElementById("anaStreak").textContent = computeStreak();
+  document.getElementById("anaPerfectStreak").textContent = computePerfectStreak();
+  document.getElementById("anaPerfectYTD").textContent = countPerfectDaysYTD();
   let totalSavings=0;
-  for(let i=0;i<12;i++){ const e=state.money[i]; if(e) totalSavings += (e.income||0)-(e.fixed||0)-(e.variable||0); }
+  for(let i=0;i<12;i++){ totalSavings += monthSavings(i); }
   document.getElementById("anaSavings").textContent = "₹"+totalSavings.toLocaleString("en-IN");
 
   const mLabels = MONTHS.map(m=>m.name.slice(0,3));
@@ -678,7 +921,23 @@ function renderAnalytics(){
       scales:{y:{min:0,max:100,ticks:{color:"#8991B3",callback:v=>v+"%"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
   });
 
-  const weightEntries = Object.values(state.weightLogs).filter(Boolean).sort((a,b)=> new Date(a.date)-new Date(b.date));
+  const pdLabels=[], pdData=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    pdLabels.push(d.toLocaleDateString(undefined,{day:"numeric",month:"short"}));
+    pdData.push(isPerfectDay(fmtDate(d)) ? 1 : 0);
+  }
+  const ctxPD = document.getElementById("perfectDayChart");
+  if(perfectDayChartInstance) perfectDayChartInstance.destroy();
+  perfectDayChartInstance = new Chart(ctxPD, {
+    type:"bar",
+    data:{labels:pdLabels, datasets:[{data:pdData, backgroundColor:"#F9C74F", borderRadius:6}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:1,ticks:{color:"#8991B3",stepSize:1,callback:v=>v?"Perfect":"—"}, grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+
+  const weightEntries = [...Object.values(state.weightLogs).filter(Boolean), ...state.bodyLogs.map(b=>({date:b.date, weight:b.weight}))]
+    .sort((a,b)=> new Date(a.date)-new Date(b.date));
   const ctx3 = document.getElementById("weightChart");
   if(weightChartInstance) weightChartInstance.destroy();
   weightChartInstance = new Chart(ctx3, {
@@ -709,24 +968,32 @@ function renderAnalytics(){
 let currentMoneyIdx = monthIndexOf(new Date());
 document.getElementById("prevMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+11)%12; renderMoney(); });
 document.getElementById("nextMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+1)%12; renderMoney(); });
-let moneyChartInstance = null;
+let moneyChartInstance = null, categoryChartInstance = null;
 
-function currentMoneyEntry(){ return state.money[currentMoneyIdx] || {income:0, fixed:0, variable:0}; }
+function ensureMoneyEntry(i){
+  if(!state.money[i]) state.money[i] = {income:0, fixed:0, expenses:[]};
+  if(!Array.isArray(state.money[i].expenses)) state.money[i].expenses = [];
+  return state.money[i];
+}
+function currentMoneyEntry(){ return state.money[currentMoneyIdx] || {income:0, fixed:0, expenses:[]}; }
+
 function renderMoney(){
   const m = MONTHS[currentMoneyIdx];
   document.getElementById("moneyMonthLabel").textContent = `${m.name} ${m.year}`;
   const entry = currentMoneyEntry();
   document.getElementById("incomeInput").value = entry.income || "";
   document.getElementById("fixedInput").value = entry.fixed || "";
-  document.getElementById("variableInput").value = entry.variable || "";
   document.getElementById("initialBalanceInput").value = state.money.initialBalance || "";
+  renderExpenseList();
+  renderCategoryChips();
   updateMoneyDerived();
   renderMoneyChart();
+  renderCategoryChart();
 }
 function updateMoneyDerived(){
   const income = +document.getElementById("incomeInput").value || 0;
   const fixed = +document.getElementById("fixedInput").value || 0;
-  const variable = +document.getElementById("variableInput").value || 0;
+  const variable = monthExpensesTotal(currentMoneyEntry());
   const savings = income - fixed - variable;
   const rate = income ? (savings/income)*100 : 0;
   document.getElementById("savingsOut").textContent = "₹" + savings.toLocaleString("en-IN");
@@ -734,18 +1001,16 @@ function updateMoneyDerived(){
 
   let cumulative = state.money.initialBalance || 0;
   for(let i=0;i<=currentMoneyIdx;i++){
-    const e = i===currentMoneyIdx ? {income,fixed,variable} : (state.money[i]||{income:0,fixed:0,variable:0});
-    cumulative += (e.income||0)-(e.fixed||0)-(e.variable||0);
+    if(i===currentMoneyIdx){ cumulative += savings; }
+    else { cumulative += monthSavings(i); }
   }
   document.getElementById("runningBalanceOut").textContent = "₹" + cumulative.toLocaleString("en-IN");
 }
-["incomeInput","fixedInput","variableInput"].forEach(id=>{
+["incomeInput","fixedInput"].forEach(id=>{
   document.getElementById(id).addEventListener("input", ()=>{
-    state.money[currentMoneyIdx] = {
-      income: +document.getElementById("incomeInput").value || 0,
-      fixed: +document.getElementById("fixedInput").value || 0,
-      variable: +document.getElementById("variableInput").value || 0,
-    };
+    const entry = ensureMoneyEntry(currentMoneyIdx);
+    entry.income = +document.getElementById("incomeInput").value || 0;
+    entry.fixed = +document.getElementById("fixedInput").value || 0;
     saveState();
     updateMoneyDerived();
     renderMoneyChart();
@@ -756,12 +1021,79 @@ document.getElementById("initialBalanceInput").addEventListener("input", (e)=>{
   saveState();
   updateMoneyDerived();
 });
+
+/* itemized expenses */
+function renderExpenseList(){
+  const wrap = document.getElementById("expenseList");
+  wrap.innerHTML = "";
+  const entry = ensureMoneyEntry(currentMoneyIdx);
+  if(entry.expenses.length===0){
+    wrap.innerHTML = `<p class="hint">No expenses logged for this month yet.</p>`;
+    return;
+  }
+  entry.expenses.forEach((exp)=>{
+    const row = document.createElement("div");
+    row.className = "expense-row";
+    const options = state.expenseCategories.map(c=>
+      `<option value="${escapeAttr(c)}" ${c===exp.category?"selected":""}>${escapeHtml(c)}</option>`).join("");
+    row.innerHTML = `
+      <select>${options}</select>
+      <input type="number" inputmode="numeric" value="${exp.amount||0}" placeholder="₹" />
+      <button aria-label="Remove">✕</button>`;
+    row.querySelector("select").addEventListener("change",(e)=>{
+      exp.category = e.target.value; saveState(); renderCategoryChart();
+    });
+    row.querySelector("input").addEventListener("input",(e)=>{
+      exp.amount = +e.target.value || 0;
+      saveState();
+      updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
+    });
+    row.querySelector("button").addEventListener("click", ()=>{
+      entry.expenses = entry.expenses.filter(x=>x.id!==exp.id);
+      saveState();
+      renderExpenseList(); updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
+    });
+    wrap.appendChild(row);
+  });
+}
+document.getElementById("addExpenseBtn").addEventListener("click", ()=>{
+  const entry = ensureMoneyEntry(currentMoneyIdx);
+  entry.expenses.push({id:Date.now()+"", category: state.expenseCategories[0]||"Misc", amount:0, note:""});
+  saveState();
+  renderExpenseList(); updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
+});
+
+/* category management */
+function renderCategoryChips(){
+  const wrap = document.getElementById("categoryChips");
+  wrap.innerHTML = "";
+  state.expenseCategories.forEach(cat=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.innerHTML = `<span>${escapeHtml(cat)}</span><button aria-label="Remove category">✕</button>`;
+    chip.querySelector("button").addEventListener("click", ()=>{
+      if(state.expenseCategories.length<=1){ toast("Keep at least one category"); return; }
+      state.expenseCategories = state.expenseCategories.filter(c=>c!==cat);
+      saveState();
+      renderCategoryChips(); renderExpenseList(); renderCategoryChart();
+    });
+    wrap.appendChild(chip);
+  });
+}
+document.getElementById("addCategoryBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("newCategoryInput");
+  const val = input.value.trim();
+  if(!val){ return; }
+  if(state.expenseCategories.includes(val)){ toast("Category already exists"); return; }
+  state.expenseCategories.push(val);
+  saveState();
+  input.value = "";
+  renderCategoryChips();
+});
+
 function renderMoneyChart(){
   const labels = MONTHS.map(m=>m.name.slice(0,3));
-  const data = MONTHS.map((m,i)=>{
-    const e = state.money[i] || {income:0,fixed:0,variable:0};
-    return (e.income||0) - (e.fixed||0) - (e.variable||0);
-  });
+  const data = MONTHS.map((m,i)=> monthSavings(i));
   const ctx = document.getElementById("moneyChart");
   if(moneyChartInstance) moneyChartInstance.destroy();
   moneyChartInstance = new Chart(ctx, {
@@ -773,6 +1105,31 @@ function renderMoneyChart(){
       scales:{
         y:{ticks:{color:"#8991B3"}, grid:{color:"#2D2D44"}},
         x:{ticks:{color:"#8991B3"}, grid:{display:false}}
+      }
+    }
+  });
+}
+function renderCategoryChart(){
+  const entry = currentMoneyEntry();
+  const totals = {};
+  (entry.expenses||[]).forEach(exp=>{
+    totals[exp.category] = (totals[exp.category]||0) + (exp.amount||0);
+  });
+  const labels = Object.keys(totals);
+  const data = labels.map(l=>totals[l]);
+  const ctx = document.getElementById("categoryChart");
+  if(categoryChartInstance) categoryChartInstance.destroy();
+  if(labels.length===0){ return; }
+  categoryChartInstance = new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[{ data, backgroundColor:"#C9A6F7", borderRadius:6 }]},
+    options:{
+      indexAxis:"y",
+      responsive:true, animation:{duration:700, easing:"easeOutQuart"},
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"#8991B3"}, grid:{color:"#2D2D44"}},
+        y:{ticks:{color:"#8991B3"}, grid:{display:false}}
       }
     }
   });
@@ -789,17 +1146,56 @@ document.getElementById("addGoalBtn").addEventListener("click", ()=>{
   renderGoals();
   toast("Goal added");
 });
+function goalRequirements(g){
+  const remaining = Math.max(g.cost - (g.saved||0), 0);
+  const target = g.targetDate ? new Date(g.targetDate) : null;
+  const daysLeft = target ? Math.max(Math.ceil((target - new Date())/86400000),0) : null;
+  const weeksLeft = daysLeft!==null ? Math.max(Math.ceil(daysLeft/7),0) : null;
+  const perDay = daysLeft ? Math.ceil(remaining/Math.max(daysLeft,1)) : remaining;
+  const perWeek = weeksLeft ? Math.ceil(remaining/Math.max(weeksLeft,1)) : remaining;
+  return {remaining, daysLeft, weeksLeft, perDay, perWeek};
+}
+function renderBudgetOverview(){
+  const card = document.getElementById("budgetOverviewCard");
+  const active = state.goals.filter(g => (g.cost - (g.saved||0)) > 0);
+  if(active.length===0){
+    card.innerHTML = `<p class="hint">No active goals yet — add one below to see combined budget needs here.</p>`;
+    return;
+  }
+  let combinedPerDay=0, combinedPerWeek=0;
+  active.forEach(g=>{
+    const r = goalRequirements(g);
+    combinedPerDay += r.perDay;
+    combinedPerWeek += r.perWeek;
+  });
+  const combinedPerMonth = Math.round(combinedPerWeek * 4.345);
+  const curMonthIdx = monthIndexOf(new Date());
+  const availableMonthly = Math.max(monthSavings(curMonthIdx), 0);
+  const withinBudget = combinedPerMonth <= availableMonthly;
+  const coverage = availableMonthly>0 ? availableMonthly/combinedPerMonth : (combinedPerMonth===0?1:0);
+  let pillCls = "pill-excellent", pillLabel = "Within budget";
+  if(coverage < 1 && coverage >= 0.7){ pillCls="pill-fair"; pillLabel="Tight"; }
+  else if(coverage < 0.7){ pillCls="pill-poor"; pillLabel="Over budget"; }
+
+  card.innerHTML = `
+    <h3 class="section-title" style="margin-top:0">Combined budget across ${active.length} active goal${active.length>1?"s":""}</h3>
+    <div class="budget-row"><span>Combined / day</span><b>₹${combinedPerDay.toLocaleString("en-IN")}</b></div>
+    <div class="budget-row"><span>Combined / week</span><b>₹${combinedPerWeek.toLocaleString("en-IN")}</b></div>
+    <div class="budget-row"><span>Combined / month (approx)</span><b>₹${combinedPerMonth.toLocaleString("en-IN")}</b></div>
+    <div class="budget-row"><span>This month's available savings</span><b>₹${availableMonthly.toLocaleString("en-IN")}</b></div>
+    <div class="rating-row" style="margin-top:10px;">
+      <span>${withinBudget ? "Your goals fit within this month's savings." : `Short by ₹${(combinedPerMonth-availableMonthly).toLocaleString("en-IN")}/month — goals may not all land on schedule.`}</span>
+      <span class="rating-pill ${pillCls}">${pillLabel}</span>
+    </div>`;
+}
 function renderGoals(){
+  renderBudgetOverview();
   const list = document.getElementById("goalsList");
   list.innerHTML = "";
   if(state.goals.length===0){ list.innerHTML = `<p class="hint">No goals yet. Tap "+ Add a goal" to start.</p>`; return; }
   state.goals.forEach((g, idx)=>{
-    const remaining = Math.max(g.cost - (g.saved||0), 0);
+    const {remaining, daysLeft, perDay, perWeek} = goalRequirements(g);
     const target = g.targetDate ? new Date(g.targetDate) : null;
-    const daysLeft = target ? Math.max(Math.ceil((target - new Date())/86400000),0) : null;
-    const weeksLeft = daysLeft!==null ? Math.max(Math.ceil(daysLeft/7),0) : null;
-    const perDay = daysLeft ? Math.ceil(remaining/Math.max(daysLeft,1)) : remaining;
-    const perWeek = weeksLeft ? Math.ceil(remaining/Math.max(weeksLeft,1)) : remaining;
     const pct = g.cost ? Math.min((g.saved||0)/g.cost,1)*100 : 0;
     const status = remaining<=0 ? "Saved!" : (target && target<new Date() ? "Overdue" : "In progress");
 
@@ -880,22 +1276,78 @@ document.getElementById("addTaskBtn").addEventListener("click", ()=>{
   const title = document.getElementById("taskTitleInput").value.trim();
   const due = document.getElementById("taskDateInput").value;
   const notes = document.getElementById("taskNotesInput").value.trim();
+  const repeat = document.getElementById("taskRepeatInput").value;
   if(!title){ toast("Enter a task title"); return; }
   if(!due){ toast("Pick a due date"); return; }
-  state.tasks.push({ id: Date.now()+"", title, dueDate: due, notes, done:false, lastNotifiedDate:null });
+  const recurrence = makeRecurrence(repeat, due);
+  if(recurrence){
+    generateSeriesInstances(Date.now()+"-series", title, notes, recurrence, due);
+  } else {
+    state.tasks.push({ id: Date.now()+"", title, dueDate: due, notes, done:false, lastNotifiedDate:null });
+  }
   saveState();
   document.getElementById("taskTitleInput").value = "";
   document.getElementById("taskDateInput").value = "";
   document.getElementById("taskNotesInput").value = "";
-  toast("Task added");
+  document.getElementById("taskRepeatInput").value = "none";
+  toast(recurrence ? "Recurring task added" : "Task added");
   calSelectedDate = due;
   calMonthIdx = monthIndexOf(new Date(due));
   renderCalendar();
 });
 
+/* recurring task generation */
+const RECUR_HORIZON_DAYS = 60;
+const RECUR_MAX_INSTANCES = 90;
+function makeRecurrence(type, dueDateStr){
+  if(type==="none" || !type) return null;
+  const d = new Date(dueDateStr);
+  if(type==="daily") return {type:"daily"};
+  if(type==="weekly") return {type:"weekly", weekday: d.getDay()};
+  if(type==="monthly") return {type:"monthly", day: d.getDate()};
+  return null;
+}
+function nextOccurrence(dateStr, recurrence){
+  const d = new Date(dateStr);
+  if(recurrence.type==="daily"){ d.setDate(d.getDate()+1); return fmtDate(d); }
+  if(recurrence.type==="weekly"){ d.setDate(d.getDate()+7); return fmtDate(d); }
+  if(recurrence.type==="monthly"){ d.setMonth(d.getMonth()+1); return fmtDate(d); }
+  return null;
+}
+function generateSeriesInstances(seriesId, title, notes, recurrence, startDate){
+  let cur = startDate;
+  const horizonDate = new Date(); horizonDate.setDate(horizonDate.getDate()+RECUR_HORIZON_DAYS);
+  const horizonKey = fmtDate(horizonDate);
+  let count=0;
+  while(cur <= horizonKey && count < RECUR_MAX_INSTANCES){
+    state.tasks.push({id: Date.now()+"-"+count, seriesId, title, dueDate:cur, notes, done:false, lastNotifiedDate:null, recurrence});
+    count++;
+    const next = nextOccurrence(cur, recurrence);
+    if(!next) break;
+    cur = next;
+  }
+}
+function topUpRecurringTasks(){
+  const seriesIds = [...new Set(state.tasks.filter(t=>t.seriesId).map(t=>t.seriesId))];
+  let changed=false;
+  const horizonDate = new Date(); horizonDate.setDate(horizonDate.getDate()+RECUR_HORIZON_DAYS);
+  const horizonKey = fmtDate(horizonDate);
+  seriesIds.forEach(sid=>{
+    const instances = state.tasks.filter(t=>t.seriesId===sid);
+    if(instances.length===0) return;
+    const latest = instances.reduce((a,b)=> a.dueDate>b.dueDate?a:b);
+    if(latest.dueDate < horizonKey){
+      const next = nextOccurrence(latest.dueDate, latest.recurrence);
+      if(next){ generateSeriesInstances(sid, latest.title, latest.notes, latest.recurrence, next); changed=true; }
+    }
+  });
+  if(changed) saveState();
+}
+
 function tasksOnDate(dateKey){ return state.tasks.filter(t => t.dueDate === dateKey); }
 
 function renderCalendar(){
+  topUpRecurringTasks();
   const m = MONTHS[calMonthIdx];
   document.getElementById("calMonthLabel").textContent = `${m.name} ${m.year}`;
   const start = monthStartDate(calMonthIdx);
@@ -947,11 +1399,12 @@ function renderTaskCards(containerId, tasks, showEmpty){
   const todayStr = todayKey();
   tasks.forEach(t=>{
     const overdue = !t.done && t.dueDate < todayStr;
+    const recurBadge = t.recurrence ? `<span class="task-recur-badge">🔁 ${t.recurrence.type}</span>` : "";
     const card = document.createElement("div");
     card.className = "task-card" + (t.done?" done":"") + (overdue?" overdue":"");
     card.innerHTML = `
       <div>
-        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-title">${escapeHtml(t.title)} ${recurBadge}</div>
         <div class="task-meta">${new Date(t.dueDate).toLocaleDateString(undefined,{day:"numeric",month:"short"})}${overdue?" · Overdue":""}</div>
         ${t.notes?`<div class="task-notes">${escapeHtml(t.notes)}</div>`:""}
       </div>
@@ -996,47 +1449,6 @@ function checkTaskReminders(){
   });
   if(changed) saveState();
 }
-
-/* ---------- CREW / CHARACTERS ---------- */
-const CREW = [
-  {name:"Monkey D. Luffy", role:"Captain — Straw Hat Pirates", blurb:"Rubber-powered, fearless, endlessly hungry — leads by refusing to give up on anyone.", img:"characters/luffy.jpg", bounty:"3,000,000,000"},
-  {name:"Roronoa Zoro", role:"First Mate / Swordsman", blurb:"Three blades, one goal: become the greatest swordsman alive.", img:"characters/zoro.jpg", bounty:"320,000,000"},
-  {name:"Nami", role:"Navigator", blurb:"Reads the sea like nobody else, and never forgets a debt.", img:"characters/nami.jpg", bounty:"366,000,000"},
-  {name:"Usopp", role:"Sniper", blurb:"Braver than he lets on, with an aim nobody can match.", img:"characters/usopp.jpg", bounty:"500,000,000"},
-  {name:"Vinsmoke Sanji", role:"Chef", blurb:"Fights with his legs so his hands stay ready to cook.", img:"characters/sanji.jpg", bounty:"1,032,000,000"},
-  {name:"Tony Tony Chopper", role:"Doctor", blurb:"Small in size, huge in heart — wanted to be human, became everyone's friend.", img:"characters/chopper.jpg", bounty:"1,000"},
-  {name:"Nico Robin", role:"Archaeologist", blurb:"Carries the weight of history so the crew can shape the future.", img:"characters/robin.jpg", bounty:"930,000,000"},
-  {name:"Franky", role:"Shipwright", blurb:"Builds dreams out of steel — SUPER, in his own words.", img:"characters/franky.jpg", bounty:"394,000,000"},
-  {name:"Brook", role:"Musician", blurb:"A promise kept across decades, set to music.", img:"characters/brook.jpg", bounty:"383,000,000"},
-  {name:"Jinbe", role:"Helmsman", blurb:"Guards the crew's path from beneath the waves.", img:"characters/jinbe.jpg", bounty:"1,100,000,000"},
-  {name:"Shanks", role:"Yonko — Red Hair Pirates", blurb:"The man who gave up an arm, and gave Luffy a hat and a dream.", img:"characters/shanks.jpg", bounty:"4,048,900,000"},
-  {name:"Monkey D. Garp", role:"Marine Hero — \"The Fist\"", blurb:"Could have caught the greatest pirates of his era. Chose to raise a grandson instead.", img:"characters/garp.jpg", bounty:null},
-];
-function renderCrew(){
-  const wrap = document.getElementById("crewList");
-  wrap.innerHTML = "";
-  CREW.forEach(c=>{
-    const card = document.createElement("div");
-    card.className = "crew-card";
-    card.innerHTML = `
-      <div class="crew-avatar">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.5 3-6.2 7-6.2s7 2.7 7 6.2"/></svg>
-      </div>
-      <div class="crew-info">
-        <div class="crew-name">${escapeHtml(c.name)}</div>
-        <div class="crew-role">${escapeHtml(c.role)}</div>
-        <div class="crew-blurb">${escapeHtml(c.blurb)}</div>
-        ${c.bounty ? `<div class="crew-bounty">฿ ${c.bounty}</div>` : `<div class="crew-bounty">No bounty — Marine</div>`}
-      </div>`;
-    const avatarEl = card.querySelector(".crew-avatar");
-    const img = new Image();
-    img.onload = ()=>{ avatarEl.innerHTML = ""; avatarEl.appendChild(img); };
-    img.onerror = ()=>{ /* keep placeholder silhouette */ };
-    img.src = c.img;
-    wrap.appendChild(card);
-  });
-}
-
 
 let manageSeg = "daily";
 document.querySelectorAll("#manageSeg .seg-btn").forEach(b=>{
@@ -1254,3 +1666,4 @@ if("serviceWorker" in navigator){
 /* ---------- Init ---------- */
 renderHome();
 checkTaskReminders();
+topUpRecurringTasks();
