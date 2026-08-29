@@ -115,6 +115,7 @@
       <button class="seg-btn active" data-fseg="today">Today</button>
       <button class="seg-btn" data-fseg="history">History</button>
       <button class="seg-btn" data-fseg="body">Body</button>
+      <button class="seg-btn" data-fseg="routines">Routines</button>
       <button class="seg-btn" data-fseg="library">Library</button>
     </div>
 
@@ -159,13 +160,37 @@
       <div class="card-list" id="bodyLogList"></div>
     </div>
 
+    <div id="fseg-routines" class="hidden">
+      <div id="routineSessionActive" class="hidden">
+        <div class="viewing-banner">
+          <span id="activeSessionLabel"></span>
+          <button class="mini-btn" id="closeSessionBtn">Back to Routines</button>
+        </div>
+        <div class="rating-row" id="sessionRating"></div>
+        <div class="card-list" id="sessionExerciseList"></div>
+      </div>
+      <div id="routinesListWrap">
+        <button class="add-btn" id="createRoutineBtn">+ Create routine</button>
+        <div class="card-list" id="routinesList"></div>
+        <h3 class="section-title">Recent sessions</h3>
+        <div class="card-list" id="recentSessionsList"></div>
+      </div>
+    </div>
+
     <div id="fseg-library" class="hidden">
       <div class="segmented" id="librarySeg">
         <button class="seg-btn active" data-lseg="calisthenics">Calisthenics</button>
         <button class="seg-btn" data-lseg="looksmaxing">Looksmaxing</button>
+        <button class="seg-btn" data-lseg="myexercises">My Exercises</button>
       </div>
-      <p class="hint" id="fitnessHint"></p>
-      <div class="card-list" id="exerciseList"></div>
+      <div id="lseg-builtin">
+        <p class="hint" id="fitnessHint"></p>
+        <div class="card-list" id="exerciseList"></div>
+      </div>
+      <div id="lseg-myexercises" class="hidden">
+        <button class="add-btn" id="createExerciseBtn">+ Create exercise</button>
+        <div class="card-list" id="myExercisesList"></div>
+      </div>
     </div>
   </section>
 
@@ -194,45 +219,133 @@
 
     <h3 class="section-title">Steps (last 14 days)</h3>
     <div class="chart-card"><canvas id="stepsChart" height="160"></canvas></div>
+
+    <h3 class="section-title">Habit insights</h3>
+    <div class="stat-grid">
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaNumericAvg">0%</div><div class="mini-stat-label">Avg numeric target</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaBestNumeric">—</div><div class="mini-stat-label">Best numeric habit</div></div>
+    </div>
+    <div id="anaTimeOfDayList"></div>
+
+    <h3 class="section-title">Fitness extras</h3>
+    <div class="stat-grid">
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomWorkouts">0</div><div class="mini-stat-label">Custom workouts completed</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomExUsage">0</div><div class="mini-stat-label">Custom exercise uses</div></div>
+    </div>
+
+    <h3 class="section-title">Money summary</h3>
+    <div class="stat-grid">
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaWeekIncome">₹0</div><div class="mini-stat-label">This week income</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaWeekExpense">₹0</div><div class="mini-stat-label">This week expenses</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaWeekSaved">₹0</div><div class="mini-stat-label">This week saved</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaMonthIncome">₹0</div><div class="mini-stat-label">This month income</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaMonthExpense">₹0</div><div class="mini-stat-label">This month expenses</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaMonthRate">0%</div><div class="mini-stat-label">Savings rate</div></div>
+    </div>
+    <div class="derived-row"><span>Average daily spending (this month)</span><b id="anaAvgDailySpend" class="mono">₹0</b></div>
   </section>
 
   <!-- MONEY -->
   <section class="view hidden" id="view-money" data-view-name="money">
     <div class="form-card">
       <label>Initial balance (₹)<input type="number" id="initialBalanceInput" inputmode="numeric" /></label>
-      <div class="derived-row"><span>Running balance (through selected month)</span><b id="runningBalanceOut" class="mono">₹0</b></div>
     </div>
 
-    <div class="month-nav">
-      <button id="prevMoneyMonth" class="icon-btn">‹</button>
-      <div class="month-label" id="moneyMonthLabel">August 2026</div>
-      <button id="nextMoneyMonth" class="icon-btn">›</button>
-    </div>
     <div class="form-card">
-      <label>Income (₹)<input type="number" id="incomeInput" inputmode="numeric" /></label>
-      <label>Fixed expenses (₹)<input type="number" id="fixedInput" inputmode="numeric" /></label>
-      <div class="derived-row"><span>Savings this month</span><b id="savingsOut" class="mono">₹0</b></div>
-      <div class="derived-row"><span>Savings rate</span><b id="savingsRateOut" class="mono">0%</b></div>
+      <div class="segmented" id="txTypeSeg">
+        <button class="seg-btn active" data-txtype="expense">Expense</button>
+        <button class="seg-btn" data-txtype="income">Income</button>
+      </div>
+      <label>Amount (₹)<input type="number" id="txAmountInput" inputmode="numeric" /></label>
+      <label>Category<select id="txCategoryInput"></select></label>
+      <label>Date<input type="date" id="txDateInput" /></label>
+      <label>Note (optional)<input type="text" id="txNoteInput" placeholder="e.g. Lunch with friends" /></label>
+      <button class="add-btn" id="addTxBtn">+ Add transaction</button>
+      <button class="add-btn secondary hidden" id="cancelTxEditBtn">Cancel edit</button>
     </div>
 
-    <h3 class="section-title">Expenses this month</h3>
-    <div class="card-list" id="expenseList"></div>
-    <button class="add-btn secondary" id="addExpenseBtn">+ Add expense</button>
+    <div class="segmented" id="moneySeg">
+      <button class="seg-btn active" data-mseg2="today">Today</button>
+      <button class="seg-btn" data-mseg2="week">Week</button>
+      <button class="seg-btn" data-mseg2="month">Month</button>
+      <button class="seg-btn" data-mseg2="history">History</button>
+    </div>
+
+    <div id="mseg-today">
+      <div class="money-dash-grid">
+        <div class="money-dash-stat"><div class="money-dash-label">Income</div><div class="money-dash-num mono" id="todayIncomeOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Spent</div><div class="money-dash-num mono" id="todaySpentOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Saved</div><div class="money-dash-num mono" id="todaySavedOut">₹0</div></div>
+      </div>
+      <h3 class="section-title">Today's spending</h3>
+      <div id="todaySpendingList"></div>
+      <div class="derived-row" style="margin-top:10px;"><span>Running balance</span><b id="runningBalanceOut" class="mono">₹0</b></div>
+    </div>
+
+    <div id="mseg-week" class="hidden">
+      <div class="money-dash-grid">
+        <div class="money-dash-stat"><div class="money-dash-label">Income</div><div class="money-dash-num mono" id="weekIncomeOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Spent</div><div class="money-dash-num mono" id="weekSpentOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Saved</div><div class="money-dash-num mono" id="weekSavedOut">₹0</div></div>
+      </div>
+      <div class="derived-row"><span>Savings rate</span><b id="weekRateOut" class="mono">0%</b></div>
+      <h3 class="section-title">Weekly spending breakdown</h3>
+      <div id="weekCategoryList"></div>
+      <h3 class="section-title">Income vs Spent vs Saved</h3>
+      <div class="chart-card"><canvas id="weekCompareChart" height="160"></canvas></div>
+    </div>
+
+    <div id="mseg-month" class="hidden">
+      <div class="month-nav">
+        <button id="prevMoneyMonth" class="icon-btn">‹</button>
+        <div class="month-label" id="moneyMonthLabel">August 2026</div>
+        <button id="nextMoneyMonth" class="icon-btn">›</button>
+      </div>
+      <div class="money-dash-grid">
+        <div class="money-dash-stat"><div class="money-dash-label">Income</div><div class="money-dash-num mono" id="monthIncomeOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Spent</div><div class="money-dash-num mono" id="monthSpentOut">₹0</div></div>
+        <div class="money-dash-stat"><div class="money-dash-label">Saved</div><div class="money-dash-num mono" id="monthSavedOut">₹0</div></div>
+      </div>
+      <div class="derived-row"><span>Savings rate</span><b id="monthRateOut" class="mono">0%</b></div>
+      <div class="derived-row"><span>Avg daily spending</span><b id="monthAvgSpendOut" class="mono">₹0</b></div>
+      <div class="derived-row"><span>Avg daily savings</span><b id="monthAvgSaveOut" class="mono">₹0</b></div>
+      <h3 class="section-title">Spending by category</h3>
+      <div class="chart-card"><canvas id="categoryChart" height="160"></canvas></div>
+      <h3 class="section-title">Daily spending trend</h3>
+      <div class="chart-card"><canvas id="dailyTrendChart" height="160"></canvas></div>
+      <h3 class="section-title">Savings trend (12 months)</h3>
+      <div class="chart-card"><canvas id="moneyChart" height="160"></canvas></div>
+    </div>
+
+    <div id="mseg-history" class="hidden">
+      <div class="form-card">
+        <div class="mh-field-row">
+          <select id="histFilterType"><option value="all">All types</option><option value="income">Income</option><option value="expense">Expense</option></select>
+          <select id="histFilterCategory"><option value="all">All categories</option></select>
+        </div>
+        <div class="mh-field-row">
+          <input type="date" id="histFilterFrom" />
+          <input type="date" id="histFilterTo" />
+        </div>
+      </div>
+      <div id="historyTxList"></div>
+    </div>
 
     <h3 class="section-title">Categories</h3>
     <div class="form-card">
-      <div class="chip-row" id="categoryChips"></div>
+      <p class="hint">Income categories</p>
+      <div class="chip-row" id="incomeCategoryChips"></div>
       <div class="manage-row">
-        <input type="text" id="newCategoryInput" placeholder="New category name" />
-        <button id="addCategoryBtn" aria-label="Add">+</button>
+        <input type="text" id="newIncomeCategoryInput" placeholder="New income category" />
+        <button id="addIncomeCategoryBtn" aria-label="Add">+</button>
+      </div>
+      <p class="hint">Expense categories</p>
+      <div class="chip-row" id="expenseCategoryChips"></div>
+      <div class="manage-row">
+        <input type="text" id="newExpenseCategoryInput" placeholder="New expense category" />
+        <button id="addExpenseCategoryBtn" aria-label="Add">+</button>
       </div>
     </div>
-
-    <h3 class="section-title">Spend by category</h3>
-    <div class="chart-card"><canvas id="categoryChart" height="160"></canvas></div>
-
-    <h3 class="section-title">Savings trend (12 months)</h3>
-    <div class="chart-card"><canvas id="moneyChart" height="160"></canvas></div>
   </section>
 
   <!-- GOALS -->
@@ -306,8 +419,23 @@
       </div>
     </div>
 
+    <h3 class="section-title">Custom backgrounds</h3>
+    <div class="form-card">
+      <p class="hint">Set your own photo as the background for any section. Images are resized and compressed automatically, and stored only on this device.</p>
+      <div id="bgSectionList"></div>
+      <div class="derived-row">
+        <span>Storage used</span>
+        <b id="bgStorageUsed" class="mono">0 KB</b>
+      </div>
+      <button class="add-btn secondary" id="clearAllBgBtn">Clear all custom backgrounds</button>
+    </div>
+
     <h3 class="section-title">Manage habits</h3>
     <div class="form-card">
+      <div class="derived-row">
+        <span>Group by time of day (Home)</span>
+        <label class="switch"><input type="checkbox" id="habitGroupingToggle" /><span class="slider"></span></label>
+      </div>
       <div class="segmented" id="manageSeg">
         <button class="seg-btn active" data-mseg="daily">Daily</button>
         <button class="seg-btn" data-mseg="weekly">Weekly</button>
@@ -315,7 +443,7 @@
       </div>
       <div id="manageList"></div>
       <button class="add-btn secondary" id="addHabitBtn">+ Add habit</button>
-      <p class="hint">Rename, remove, or add habits here. Your logged history for existing habits stays intact — only the label changes.</p>
+      <p class="hint">Rename, remove, or add habits here. Tap ⚙ on any habit for numeric targets, units, and time of day. Your logged history stays intact.</p>
     </div>
 
     <h3 class="section-title">Notifications</h3>
@@ -406,6 +534,62 @@
       <button class="add-btn" id="weightModalSave">Save</button>
       <button class="add-btn secondary" id="weightModalSkip">Skip this week</button>
     </div>
+  </div>
+</div>
+
+<!-- EXERCISE BUILDER -->
+<div class="sheet-backdrop hidden" id="exerciseBackdrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3 class="section-title" style="margin-top:0" id="exerciseFormTitle">Create exercise</h3>
+    <div class="form-card">
+      <label>Name *<input type="text" id="exNameInput" placeholder="e.g. Archer Push-Up" /></label>
+      <label>Category<select id="exCategoryInput">
+        <option>Strength</option><option>Calisthenics</option><option>Mobility</option>
+        <option>Cardio</option><option>Core</option><option>Stretching</option><option>Custom</option>
+      </select></label>
+      <label>Muscle group<select id="exMuscleInput">
+        <option>Chest</option><option>Back</option><option>Shoulders</option><option>Arms</option>
+        <option>Legs</option><option>Core</option><option>Full Body</option>
+      </select></label>
+      <label>Difficulty<select id="exDifficultyInput">
+        <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
+      </select></label>
+      <label>Equipment (optional)<input type="text" id="exEquipmentInput" placeholder="e.g. Pull-up bar, none" /></label>
+      <label>Sets<input type="number" id="exSetsInput" inputmode="numeric" placeholder="e.g. 3" /></label>
+      <label>Reps<input type="text" id="exRepsInput" placeholder="e.g. 12 or 8-10" /></label>
+      <label>Duration (optional)<input type="text" id="exDurationInput" placeholder="e.g. 30 sec" /></label>
+      <label>Rest time (optional)<input type="text" id="exRestInput" placeholder="e.g. 60 sec" /></label>
+      <label>Description (optional)<input type="text" id="exDescriptionInput" placeholder="What this exercise is" /></label>
+      <label>Form cues (optional)<input type="text" id="exCuesInput" placeholder="Key technique tips" /></label>
+      <label>Video URL (optional)<input type="text" id="exVideoInput" placeholder="https://…" /></label>
+      <button class="add-btn" id="exerciseSaveBtn">Save exercise</button>
+      <button class="add-btn secondary" id="exerciseCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROUTINE BUILDER -->
+<div class="sheet-backdrop hidden" id="routineBackdrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3 class="section-title" style="margin-top:0" id="routineFormTitle">Create routine</h3>
+    <div class="form-card">
+      <label>Routine name *<input type="text" id="routineNameInput" placeholder="e.g. Push Day" /></label>
+    </div>
+    <h3 class="section-title">Exercises in this routine</h3>
+    <div id="routineExerciseList"></div>
+    <div class="form-card">
+      <label>Add exercise<select id="routineExercisePicker"></select></label>
+      <div class="mh-field-row">
+        <input type="number" id="routineSetsInput" placeholder="Sets" inputmode="numeric" />
+        <input type="text" id="routineRepsInput" placeholder="Reps/Duration" />
+        <input type="text" id="routineRestInput" placeholder="Rest" />
+      </div>
+      <button class="add-btn secondary" id="routineAddExerciseBtn">+ Add to routine</button>
+    </div>
+    <button class="add-btn" id="routineSaveBtn">Save routine</button>
+    <button class="add-btn secondary" id="routineCancelBtn">Cancel</button>
   </div>
 </div>
 

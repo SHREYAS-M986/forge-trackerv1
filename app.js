@@ -92,9 +92,19 @@ function motionIcon(type){
 /* ---------- State ---------- */
 const DEFAULT_STATE = () => ({
   habits: {
-    daily: ["Wake up 6 AM","Workout / calisthenics","No junk food","Read 20 min","Journal","No phone after 11 PM","Cold shower"],
-    weekly: ["Meal prep","Long run","Deep clean room","Review budget","Call family","Plan next week"],
-    monthly: ["Full body progress photo","Review goals","Declutter","Skill practice review"],
+    daily: [
+      {name:"Wake up 6 AM", type:"checkbox", target:null, unit:"", min:null, time:"morning"},
+      {name:"Workout / calisthenics", type:"checkbox", target:null, unit:"", min:null, time:"anytime"},
+      {name:"No junk food", type:"checkbox", target:null, unit:"", min:null, time:"anytime"},
+      {name:"Read 20 min", type:"numeric", target:20, unit:"min", min:10, time:"evening"},
+      {name:"Journal", type:"checkbox", target:null, unit:"", min:null, time:"night"},
+      {name:"No phone after 11 PM", type:"checkbox", target:null, unit:"", min:null, time:"night"},
+      {name:"Cold shower", type:"checkbox", target:null, unit:"", min:null, time:"morning"},
+    ],
+    weekly: ["Meal prep","Long run","Deep clean room","Review budget","Call family","Plan next week"]
+      .map(n=>({name:n, type:"checkbox", target:null, unit:"", min:null, time:"anytime"})),
+    monthly: ["Full body progress photo","Review goals","Declutter","Skill practice review"]
+      .map(n=>({name:n, type:"checkbox", target:null, unit:"", min:null, time:"anytime"})),
   },
   dailyLogs: {},
   weeklyLogs: {},
@@ -103,16 +113,22 @@ const DEFAULT_STATE = () => ({
   stepLogs: {},        // "YYYY-MM-DD" -> steps
   workoutLogs: {},     // "YYYY-MM-DD" -> { "<exerciseIndex>": [bool,...] }
   workoutStatus: {},   // "YYYY-MM-DD" -> {type:"skipped"} | {type:"makeup", loggedOn:"YYYY-MM-DD"}
-  bodyLogs: [],         // [{id, date, weight, waist}] — dedicated Fitness body-log entries (separate from weekly weightLogs)
+  bodyLogs: [],         // [{id, date, weight, waist}]
+  customExercises: [],  // [{id,name,category,muscleGroup,difficulty,equipment,description,cues,sets,reps,duration,rest,videoUrl,icon}]
+  routines: [],          // [{id,name,exercises:[{name,sets,reps,duration,rest,sourceType,sourceId}]}]
+  routineWorkoutLogs: [], // [{id,date,routineId,routineName,exercises:[{name,targetSets,targetReps,targetDuration,loggedSets:[bool]}],completedAt}]
   tasks: [],           // {id, title, dueDate, notes, done, lastNotifiedDate, recurrence?, seriesId?}
-  money: { initialBalance: 0 },   // per-month entries: money[i] = {income, fixed, expenses:[{id,category,amount,note}]}
-  expenseCategories: ["Food","Transport","Subscriptions","Misc"],
+  money: { initialBalance: 0 },
+  transactions: [],      // [{id,type:"income"|"expense",amount,category,date,note}]
+  incomeCategories: ["Salary","Freelance","Pocket Money","Business","Other"],
+  expenseCategories: ["Food","Transport","Shopping","Bills","Entertainment","Education","Fitness","Other"],
   goals: [],
   learn: [],
   settings: {
     notifOn:false, reminderTime:"20:00", taskNotifOn:true,
     stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
-    reduceMotion:false, theme:"classic",
+    reduceMotion:false, theme:"classic", sectionBackgrounds:{},
+    habitGroupingOn:true, migratedToV2:false,
   },
 });
 
@@ -122,9 +138,56 @@ function loadState(){
     const raw = localStorage.getItem("forgeData");
     if(!raw) return DEFAULT_STATE();
     const parsed = JSON.parse(raw);
-    const d = DEFAULT_STATE();
-    return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
+    const merged = mergeWithDefaults(parsed);
+    const needsMigration = !merged.settings.migratedToV2;
+    const migrated = migrateState(merged);
+    if(needsMigration){
+      localStorage.setItem("forgeData", JSON.stringify(migrated)); // persist immediately so migration never re-runs / duplicates
+    }
+    return migrated;
   }catch(e){ return DEFAULT_STATE(); }
+}
+function mergeWithDefaults(parsed){
+  const d = DEFAULT_STATE();
+  return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
+}
+/* Upgrade old string-array habits to objects, and old monthly money entries to dated transactions. Runs once. */
+function migrateState(s){
+  if(s.settings.migratedToV2) return s;
+
+  ["daily","weekly","monthly"].forEach(cat=>{
+    s.habits[cat] = (s.habits[cat]||[]).map(h=>{
+      if(typeof h === "string") return {name:h, type:"checkbox", target:null, unit:"", min:null, time:"anytime"};
+      return {type:"checkbox", target:null, unit:"", min:null, time:"anytime", ...h};
+    });
+  });
+
+  // migrate old per-month money entries (income/fixed/expenses or legacy flat variable) into dated transactions
+  if(s.money){
+    for(let i=0;i<12;i++){
+      const entry = s.money[i];
+      if(!entry) continue;
+      const m = MONTHS[i];
+      const dateKey = fmtDate(new Date(m.year, monthNumFromName(m.name), 1));
+      if(entry.income){
+        s.transactions.push({id:`mig-inc-${i}`, type:"income", amount:entry.income, category:"Migrated Income", date:dateKey, note:"Migrated from monthly entry"});
+      }
+      if(entry.fixed){
+        s.transactions.push({id:`mig-fixed-${i}`, type:"expense", amount:entry.fixed, category:"Bills", date:dateKey, note:"Migrated fixed expenses"});
+      }
+      if(Array.isArray(entry.expenses) && entry.expenses.length>0){
+        entry.expenses.forEach((exp,j)=>{
+          if(!exp.amount) return;
+          s.transactions.push({id:`mig-exp-${i}-${j}`, type:"expense", amount:exp.amount, category:exp.category||"Other", date:dateKey, note:exp.note||"Migrated expense"});
+        });
+      } else if(entry.variable){
+        s.transactions.push({id:`mig-var-${i}`, type:"expense", amount:entry.variable, category:"Other", date:dateKey, note:"Migrated variable expenses"});
+      }
+    }
+  }
+
+  s.settings.migratedToV2 = true;
+  return s;
 }
 function saveState(){ localStorage.setItem("forgeData", JSON.stringify(state)); }
 
@@ -238,19 +301,65 @@ function ratingLabel(pct){
   return {label:"Very Poor", cls:"pill-verypoor"};
 }
 
-/* Effective monthly variable-expense total: itemized `expenses` array if present, else legacy flat `variable` number */
-function monthExpensesTotal(entry){
-  if(!entry) return 0;
-  if(Array.isArray(entry.expenses) && entry.expenses.length>0){
-    return entry.expenses.reduce((s,x)=> s+(x.amount||0), 0);
+/* ---------- Habit entry helpers (checkbox vs numeric) ---------- */
+function habitName(h){ return (h && typeof h==="object") ? h.name : h; }
+function habitType(h){ return (h && typeof h==="object" && h.type) ? h.type : "checkbox"; }
+function habitTarget(h){ return (h && typeof h==="object") ? h.target : null; }
+function habitUnit(h){ return (h && typeof h==="object" && h.unit) ? h.unit : ""; }
+function habitMin(h){ return (h && typeof h==="object") ? h.min : null; }
+function habitTime(h){ return (h && typeof h==="object" && h.time) ? h.time : "anytime"; }
+const TIME_ORDER = ["morning","afternoon","evening","night","anytime"];
+const TIME_LABELS = {morning:"🌅 Morning", afternoon:"☀️ Afternoon", evening:"🌆 Evening", night:"🌙 Night", anytime:"Anytime"};
+
+function entryProgress(entry, h){
+  if(habitType(h)==="numeric"){
+    const val = (typeof entry === "number") ? entry : 0;
+    const target = habitTarget(h) || 1;
+    const min = habitMin(h);
+    const pct = target>0 ? Math.min(val/target,1) : 0;
+    let st = "missed";
+    if(val >= target) st = "done";
+    else if(min!=null && val >= min) st = "partial";
+    else if(val>0) st = "partial";
+    return {pct, val, target, unit:habitUnit(h), state:st};
   }
-  return entry.variable || 0;
+  const on = entry===true;
+  return {pct: on?1:0, val:on, target:1, unit:"", state: on?"done":"missed"};
 }
-function monthSavings(i){
-  const e = state.money[i];
-  if(!e) return 0;
-  return (e.income||0) - (e.fixed||0) - monthExpensesTotal(e);
+function entryCountsAsDone(entry, h){ return entryProgress(entry,h).state === "done"; }
+function entryHasProgress(entry, h){ const s=entryProgress(entry,h).state; return s==="done"||s==="partial"; }
+function quickIncrements(unit){
+  const u = (unit||"").toLowerCase();
+  if(u==="ml") return [100,250,500];
+  if(u==="l"||u==="liter"||u==="liters") return [0.25,0.5,1];
+  if(u==="min"||u==="mins"||u==="minutes") return [5,10,15];
+  if(u==="hr"||u==="hrs"||u==="hours"||u==="hour") return [0.5,1];
+  if(u==="reps"||u==="rep") return [5,10,25];
+  if(u==="steps") return [500,1000,2000];
+  if(u==="km") return [0.5,1,2];
+  return [1,5,10];
 }
+
+/* ---------- Transaction-based money helpers ---------- */
+function txOnDate(dateKey){ return state.transactions.filter(t=>t.date===dateKey); }
+function txInRange(startKey, endKey){ return state.transactions.filter(t => t.date>=startKey && t.date<=endKey); }
+function sumTx(list, type){ return list.filter(t=>t.type===type).reduce((s,t)=>s+(t.amount||0),0); }
+function weekRangeFor(refDate){
+  const day = refDate.getDay();
+  const diff = (day===0)?6:day-1;
+  const start = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate()-diff);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate()+6);
+  return {start:fmtDate(start), end:fmtDate(end)};
+}
+function monthRangeForIndex(i){
+  const m = MONTHS[i];
+  const start = new Date(m.year, monthNumFromName(m.name), 1);
+  const end = new Date(m.year, monthNumFromName(m.name), m.days);
+  return {start:fmtDate(start), end:fmtDate(end)};
+}
+function monthIncome(i){ const {start,end}=monthRangeForIndex(i); return sumTx(txInRange(start,end),"income"); }
+function monthExpenseTotal(i){ const {start,end}=monthRangeForIndex(i); return sumTx(txInRange(start,end),"expense"); }
+function monthSavings(i){ return monthIncome(i) - monthExpenseTotal(i); }
 
 /* ---------- Toast ---------- */
 function toast(msg){
@@ -331,10 +440,15 @@ function renderHome(){
   document.getElementById("quoteTicker").textContent = "\u201C" + quoteForToday() + "\u201D";
 
   const key = todayKey();
-  const log = state.dailyLogs[key] || Array(state.habits.daily.length).fill(false);
-  const doneCount = log.filter(Boolean).length;
   const total = state.habits.daily.length;
-  const pct = total ? doneCount/total : 0;
+  const log = state.dailyLogs[key] || Array(total).fill(false);
+  let doneCount=0, pctSum=0;
+  state.habits.daily.forEach((h,i)=>{
+    const p = entryProgress(log[i], h);
+    if(p.state==="done") doneCount++;
+    pctSum += p.pct;
+  });
+  const pct = total ? pctSum/total : 0;
 
   const banner = document.getElementById("reminderBanner");
   if(doneCount===0){
@@ -354,35 +468,7 @@ function renderHome(){
   document.getElementById("ratingNum").textContent = r.label;
   document.getElementById("streakNum").textContent = computeStreak();
 
-  const list = document.getElementById("todayHabits");
-  list.innerHTML = "";
-  state.habits.daily.forEach((name,i)=>{
-    const on = !!log[i];
-    const card = document.createElement("div");
-    card.className = "habit-card" + (on?" checked":"");
-    card.innerHTML = `
-      <div><div class="habit-name">${escapeHtml(name)}</div></div>
-      <div class="check-toggle ${on?"on":""}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#11111B" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div>`;
-    card.querySelector(".check-toggle").addEventListener("click", ()=>{
-      const arr = state.dailyLogs[key] || Array(total).fill(false);
-      const turningOn = !arr[i];
-      arr[i] = turningOn;
-      state.dailyLogs[key] = arr;
-      saveState();
-      renderHome();
-      if(turningOn && !state.settings.reduceMotion){
-        requestAnimationFrame(()=>{
-          const newCard = list.children[i];
-          if(newCard){
-            newCard.classList.add("pop");
-            newCard.querySelector(".check-toggle").classList.add("pop");
-            setTimeout(()=>newCard.classList.remove("pop"), 650);
-          }
-        });
-      }
-    });
-    list.appendChild(card);
-  });
+  renderDailyHabitList(document.getElementById("todayHabits"), key);
 
   const stepsWrap = document.getElementById("stepsStatWrap");
   stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
@@ -391,6 +477,92 @@ function renderHome(){
   renderPerfectDayCard();
   renderTrendChart();
   maybePromptWeight();
+}
+
+/* Reusable habit card: checkbox toggle OR numeric progress + quick-add + manual entry */
+function buildHabitCardEl(h, entry, onChange){
+  const type = habitType(h);
+  const card = document.createElement("div");
+  if(type==="numeric"){
+    const p = entryProgress(entry, h);
+    const stateCls = p.state==="done" ? "checked" : (p.state==="partial" ? "partial" : "");
+    card.className = "habit-card numeric " + stateCls;
+    const dv = Number.isInteger(p.val) ? p.val : Math.round(p.val*100)/100;
+    card.innerHTML = `
+      <div class="habit-numeric-top">
+        <div class="habit-name">${escapeHtml(habitName(h))}</div>
+        <div class="habit-numeric-value mono">${dv}${p.unit?" "+p.unit:""} / ${p.target}${p.unit?" "+p.unit:""}</div>
+      </div>
+      <div class="habit-progress-track"><div class="habit-progress-fill" style="width:${Math.round(p.pct*100)}%"></div></div>
+      <div class="habit-quick-row">
+        ${quickIncrements(p.unit).map(d=>`<button class="habit-qbtn" type="button" data-delta="${d}">+${d}${p.unit}</button>`).join("")}
+        <input type="number" class="habit-manual-input" placeholder="Set value" step="any" />
+      </div>`;
+    card.querySelectorAll(".habit-qbtn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const delta = +btn.dataset.delta;
+        onChange(Math.round(((p.val||0)+delta)*100)/100);
+      });
+    });
+    const manual = card.querySelector(".habit-manual-input");
+    manual.addEventListener("keydown",(e)=>{ if(e.key==="Enter") manual.blur(); });
+    manual.addEventListener("change", ()=>{
+      if(manual.value===""){ return; }
+      const v = +manual.value;
+      if(!isNaN(v)) onChange(v);
+    });
+  } else {
+    const on = entry===true;
+    card.className = "habit-card" + (on?" checked":"");
+    card.innerHTML = `
+      <div><div class="habit-name">${escapeHtml(habitName(h))}</div></div>
+      <div class="check-toggle ${on?"on":""}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#11111B" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div>`;
+    card.querySelector(".check-toggle").addEventListener("click", ()=>{ onChange(!on); });
+  }
+  return card;
+}
+
+function renderDailyHabitList(containerEl, dateKey){
+  containerEl.innerHTML = "";
+  const total = state.habits.daily.length;
+  const log = state.dailyLogs[dateKey] || Array(total).fill(false);
+  const indices = state.habits.daily.map((_,i)=>i);
+
+  const makeCard = (i)=>{
+    const h = state.habits.daily[i];
+    const entry = log[i];
+    const card = buildHabitCardEl(h, entry, (newVal)=>{
+      const arr = state.dailyLogs[dateKey] || Array(total).fill(habitType(h)==="numeric"?0:false);
+      const wasCounted = entryCountsAsDone(arr[i], h);
+      arr[i] = newVal;
+      state.dailyLogs[dateKey] = arr;
+      saveState();
+      const nowCounted = entryCountsAsDone(newVal, h);
+      renderHome();
+      if(nowCounted && !wasCounted && !state.settings.reduceMotion){
+        requestAnimationFrame(()=>{
+          const fresh = document.querySelector(`#todayHabits [data-hidx="${i}"]`);
+          if(fresh){ fresh.classList.add("pop"); setTimeout(()=>fresh.classList.remove("pop"),650); }
+        });
+      }
+    });
+    card.dataset.hidx = i;
+    return card;
+  };
+
+  if(state.settings.habitGroupingOn){
+    TIME_ORDER.forEach(t=>{
+      const idxs = indices.filter(i=> habitTime(state.habits.daily[i])===t);
+      if(idxs.length===0) return;
+      const heading = document.createElement("div");
+      heading.className = "habit-group-title";
+      heading.textContent = TIME_LABELS[t];
+      containerEl.appendChild(heading);
+      idxs.forEach(i=> containerEl.appendChild(makeCard(i)));
+    });
+  } else {
+    indices.forEach(i=> containerEl.appendChild(makeCard(i)));
+  }
 }
 
 function renderPerfectDayCard(){
@@ -415,7 +587,8 @@ function computeStreak(){
   while(true){
     const key = fmtDate(d);
     const log = state.dailyLogs[key];
-    if(log && log.some(Boolean)){ streak++; d.setDate(d.getDate()-1); }
+    const hasProgress = log && state.habits.daily.some((h,i)=> entryHasProgress(log[i], h));
+    if(hasProgress){ streak++; d.setDate(d.getDate()-1); }
     else break;
   }
   return streak;
@@ -425,7 +598,7 @@ function computeStreak(){
 function isPerfectDay(dateKey){
   const dailyLog = state.dailyLogs[dateKey] || [];
   const totalHabits = state.habits.daily.length;
-  const allHabitsDone = totalHabits>0 && dailyLog.filter(Boolean).length === totalHabits;
+  const allHabitsDone = totalHabits>0 && state.habits.daily.every((h,i)=> entryCountsAsDone(dailyLog[i], h));
   const wStatus = workoutDayStatus(dateKey);
   const workoutDone = wStatus==="done" || wStatus==="makeup";
   let stepsOk = true;
@@ -533,17 +706,21 @@ function renderDailyGrid(){
 
   let rows = "";
   let dayTotals = Array(m.days).fill(0);
-  state.habits.daily.forEach((name, hi)=>{
-    let row = `<tr><td class="habit-label">${escapeHtml(name)}</td>`;
+  state.habits.daily.forEach((h, hi)=>{
+    let row = `<tr><td class="habit-label">${escapeHtml(habitName(h))}</td>`;
     let count=0;
     for(let d=1; d<=m.days; d++){
       const dateObj = new Date(start.getFullYear(), start.getMonth(), d);
       const key = fmtDate(dateObj);
       const log = state.dailyLogs[key] || [];
-      const on = !!log[hi];
-      if(on){count++; dayTotals[d-1]++;}
+      const p = entryProgress(log[hi], h);
       const isToday = key===todayStr;
-      row += `<td class="day-cell ${on?"on":""} ${isToday?"today":""}" data-date="${key}" data-hi="${hi}">${on?"✓":""}</td>`;
+      let cellCls = "day-cell";
+      let cellContent = "";
+      if(p.state==="done"){ cellCls+=" on"; cellContent="✓"; count++; dayTotals[d-1]++; }
+      else if(p.state==="partial"){ cellCls+=" partial-cell"; cellContent="•"; }
+      if(isToday) cellCls += " today";
+      row += `<td class="${cellCls}" data-date="${key}" data-hi="${hi}">${cellContent}</td>`;
     }
     const pct = Math.round((count/m.days)*100);
     row += `<td class="mono">${pct}%</td></tr>`;
@@ -554,8 +731,18 @@ function renderDailyGrid(){
   table.querySelectorAll(".day-cell").forEach(cell=>{
     cell.addEventListener("click", ()=>{
       const key = cell.dataset.date, hi = +cell.dataset.hi;
-      const arr = state.dailyLogs[key] || Array(state.habits.daily.length).fill(false);
-      arr[hi] = !arr[hi];
+      const h = state.habits.daily[hi];
+      const arr = state.dailyLogs[key] || Array(state.habits.daily.length).fill(habitType(h)==="numeric"?0:false);
+      if(habitType(h)==="numeric"){
+        const cur = typeof arr[hi]==="number" ? arr[hi] : 0;
+        const val = prompt(`${habitName(h)}${habitUnit(h)?" ("+habitUnit(h)+")":""} — target ${habitTarget(h)}`, cur);
+        if(val===null) return;
+        const num = +val;
+        if(isNaN(num)) return;
+        arr[hi] = num;
+      } else {
+        arr[hi] = !arr[hi];
+      }
       state.dailyLogs[key] = arr;
       saveState();
       renderDailyGrid();
@@ -574,17 +761,13 @@ function renderDailyGrid(){
 function renderWeekly(){
   document.getElementById("weekLabel").textContent = `Week ${currentWeekIdx+1} of 52`;
   const list = document.getElementById("weeklyHabits");
-  const log = state.weeklyLogs[currentWeekIdx] || Array(state.habits.weekly.length).fill(false);
+  const total = state.habits.weekly.length;
+  const log = state.weeklyLogs[currentWeekIdx] || Array(total).fill(false);
   list.innerHTML = "";
-  state.habits.weekly.forEach((name,i)=>{
-    const on = !!log[i];
-    const card = document.createElement("div");
-    card.className = "habit-card" + (on?" checked":"");
-    card.innerHTML = `<div class="habit-name">${escapeHtml(name)}</div>
-      <div class="check-toggle ${on?"on":""}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#11111B" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div>`;
-    card.querySelector(".check-toggle").addEventListener("click", ()=>{
-      const arr = state.weeklyLogs[currentWeekIdx] || Array(state.habits.weekly.length).fill(false);
-      arr[i] = !arr[i];
+  state.habits.weekly.forEach((h,i)=>{
+    const card = buildHabitCardEl(h, log[i], (newVal)=>{
+      const arr = state.weeklyLogs[currentWeekIdx] || Array(total).fill(habitType(h)==="numeric"?0:false);
+      arr[i] = newVal;
       state.weeklyLogs[currentWeekIdx] = arr;
       saveState();
       renderWeekly();
@@ -595,22 +778,23 @@ function renderWeekly(){
 
 function renderMonthly(){
   const list = document.getElementById("monthlyHabits");
-  const log = state.monthlyLogs[currentMonthIdx] || Array(state.habits.monthly.length).fill(false);
+  const total = state.habits.monthly.length;
+  const log = state.monthlyLogs[currentMonthIdx] || Array(total).fill(false);
   list.innerHTML = "";
   const m = MONTHS[currentMonthIdx];
-  state.habits.monthly.forEach((name,i)=>{
-    const on = !!log[i];
-    const card = document.createElement("div");
-    card.className = "habit-card" + (on?" checked":"");
-    card.innerHTML = `<div><div class="habit-name">${escapeHtml(name)}</div><div class="habit-cat">${m.name} ${m.year}</div></div>
-      <div class="check-toggle ${on?"on":""}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#11111B" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div>`;
-    card.querySelector(".check-toggle").addEventListener("click", ()=>{
-      const arr = state.monthlyLogs[currentMonthIdx] || Array(state.habits.monthly.length).fill(false);
-      arr[i] = !arr[i];
+  state.habits.monthly.forEach((h,i)=>{
+    const card = buildHabitCardEl(h, log[i], (newVal)=>{
+      const arr = state.monthlyLogs[currentMonthIdx] || Array(total).fill(habitType(h)==="numeric"?0:false);
+      arr[i] = newVal;
       state.monthlyLogs[currentMonthIdx] = arr;
       saveState();
       renderMonthly();
     });
+    const catDiv = document.createElement("div");
+    catDiv.className = "habit-cat";
+    catDiv.textContent = `${m.name} ${m.year}`;
+    const nameEl = card.querySelector(".habit-name");
+    if(nameEl && nameEl.parentElement) nameEl.parentElement.appendChild(catDiv);
     list.appendChild(card);
   });
 }
@@ -625,7 +809,7 @@ document.querySelectorAll("#fitnessSeg .seg-btn").forEach(b=>{
     document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     fitnessSeg = b.dataset.fseg;
-    ["today","history","body","library"].forEach(s=>{
+    ["today","history","body","routines","library"].forEach(s=>{
       document.getElementById("fseg-"+s).classList.toggle("hidden", s!==fitnessSeg);
     });
     renderFitness();
@@ -636,6 +820,8 @@ document.querySelectorAll("#librarySeg .seg-btn").forEach(b=>{
     document.querySelectorAll("#librarySeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     librarySeg = b.dataset.lseg;
+    document.getElementById("lseg-builtin").classList.toggle("hidden", librarySeg==="myexercises");
+    document.getElementById("lseg-myexercises").classList.toggle("hidden", librarySeg!=="myexercises");
     renderLibrary();
   });
 });
@@ -644,6 +830,7 @@ function renderFitness(){
   if(fitnessSeg==="today") renderTodayWorkout();
   else if(fitnessSeg==="history") renderWorkoutHistory();
   else if(fitnessSeg==="body") renderBodyLog();
+  else if(fitnessSeg==="routines") renderRoutines();
   else renderLibrary();
 }
 
@@ -829,6 +1016,7 @@ function renderBodyLog(){
 }
 
 function renderLibrary(){
+  if(librarySeg==="myexercises"){ renderMyExercises(); return; }
   const list = document.getElementById("exerciseList");
   const hint = document.getElementById("fitnessHint");
   const data = librarySeg==="calisthenics" ? CALISTHENICS : LOOKSMAXING;
@@ -854,6 +1042,307 @@ function renderLibrary(){
     list.appendChild(card);
   });
 }
+
+/* ---------- CUSTOM EXERCISE BUILDER ---------- */
+function guessMotionType(category){
+  const map = {Strength:"push", Calisthenics:"push", Mobility:"stretch", Cardio:"core", Core:"core", Stretching:"stretch"};
+  return map[category] || "core";
+}
+function renderMyExercises(){
+  const list = document.getElementById("myExercisesList");
+  list.innerHTML = "";
+  if(state.customExercises.length===0){
+    list.innerHTML = `<p class="hint">No custom exercises yet. Tap "+ Create exercise" to add one.</p>`;
+    return;
+  }
+  state.customExercises.forEach(ex=>{
+    const metaParts = [ex.muscleGroup, ex.sets?`${ex.sets} sets`:null, ex.reps||null].filter(Boolean).join(" · ");
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+    card.innerHTML = `
+      <div class="exercise-motion">${motionIcon(guessMotionType(ex.category))}</div>
+      <div class="exercise-info">
+        <div class="exercise-name">${escapeHtml(ex.name)}</div>
+        <div class="exercise-meta">${escapeHtml(metaParts||ex.category||"")}</div>
+        ${ex.description?`<div class="exercise-cue">${escapeHtml(ex.description)}</div>`:""}
+        <div class="custom-ex-actions">
+          <button class="mini-btn" data-act="edit">Edit</button>
+          <button class="mini-btn" data-act="dup">Duplicate</button>
+          <button class="mini-btn delete" data-act="del">Delete</button>
+        </div>
+      </div>`;
+    card.querySelector('[data-act="edit"]').addEventListener("click", ()=> openExerciseSheet(ex));
+    card.querySelector('[data-act="dup"]').addEventListener("click", ()=>{
+      state.customExercises.push({...ex, id:Date.now()+"", name:ex.name+" (copy)"});
+      saveState(); renderMyExercises();
+      toast("Exercise duplicated");
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      if(!confirm("Delete this exercise? Past workout history using it keeps its name and logged data.")) return;
+      state.customExercises = state.customExercises.filter(x=>x.id!==ex.id);
+      saveState(); renderMyExercises();
+      toast("Exercise deleted");
+    });
+    list.appendChild(card);
+  });
+}
+let editingExerciseId = null;
+function openExerciseSheet(ex){
+  editingExerciseId = ex ? ex.id : null;
+  document.getElementById("exerciseFormTitle").textContent = ex ? "Edit exercise" : "Create exercise";
+  document.getElementById("exNameInput").value = ex ? ex.name : "";
+  document.getElementById("exCategoryInput").value = ex ? (ex.category||"Strength") : "Strength";
+  document.getElementById("exMuscleInput").value = ex ? (ex.muscleGroup||"Full Body") : "Full Body";
+  document.getElementById("exDifficultyInput").value = ex ? (ex.difficulty||"Beginner") : "Beginner";
+  document.getElementById("exEquipmentInput").value = ex ? (ex.equipment||"") : "";
+  document.getElementById("exSetsInput").value = ex && ex.sets!=null ? ex.sets : "";
+  document.getElementById("exRepsInput").value = ex ? (ex.reps||"") : "";
+  document.getElementById("exDurationInput").value = ex ? (ex.duration||"") : "";
+  document.getElementById("exRestInput").value = ex ? (ex.rest||"") : "";
+  document.getElementById("exDescriptionInput").value = ex ? (ex.description||"") : "";
+  document.getElementById("exCuesInput").value = ex ? (ex.cues||"") : "";
+  document.getElementById("exVideoInput").value = ex ? (ex.videoUrl||"") : "";
+  showSheet("exerciseBackdrop");
+}
+document.getElementById("createExerciseBtn").addEventListener("click", ()=> openExerciseSheet(null));
+document.getElementById("exerciseCancelBtn").addEventListener("click", ()=> hideSheet("exerciseBackdrop"));
+document.getElementById("exerciseSaveBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("exNameInput").value.trim();
+  if(!name){ toast("Exercise name is required"); return; }
+  const data = {
+    name,
+    category: document.getElementById("exCategoryInput").value,
+    muscleGroup: document.getElementById("exMuscleInput").value,
+    difficulty: document.getElementById("exDifficultyInput").value,
+    equipment: document.getElementById("exEquipmentInput").value.trim(),
+    sets: document.getElementById("exSetsInput").value ? +document.getElementById("exSetsInput").value : null,
+    reps: document.getElementById("exRepsInput").value.trim(),
+    duration: document.getElementById("exDurationInput").value.trim(),
+    rest: document.getElementById("exRestInput").value.trim(),
+    description: document.getElementById("exDescriptionInput").value.trim(),
+    cues: document.getElementById("exCuesInput").value.trim(),
+    videoUrl: document.getElementById("exVideoInput").value.trim(),
+  };
+  if(editingExerciseId){
+    const idx = state.customExercises.findIndex(x=>x.id===editingExerciseId);
+    if(idx>-1) state.customExercises[idx] = {...state.customExercises[idx], ...data};
+  } else {
+    state.customExercises.push({id:Date.now()+"", ...data});
+  }
+  saveState();
+  hideSheet("exerciseBackdrop");
+  renderMyExercises();
+  toast("Exercise saved");
+});
+
+/* ---------- ROUTINE TEMPLATES ---------- */
+let editingRoutineId = null;
+let routineDraftExercises = [];
+let activeSessionId = null;
+
+function allExerciseOptions(){
+  const opts = [];
+  CALISTHENICS.forEach(e=> opts.push({name:e.name, sourceType:"builtin"}));
+  LOOKSMAXING.forEach(e=> opts.push({name:e.name, sourceType:"builtin"}));
+  state.customExercises.forEach(e=> opts.push({name:e.name, sourceType:"custom", sourceId:e.id}));
+  return opts;
+}
+function populateRoutinePicker(){
+  document.getElementById("routineExercisePicker").innerHTML =
+    allExerciseOptions().map((o,i)=>`<option value="${i}">${escapeHtml(o.name)}</option>`).join("");
+}
+function renderRoutineDraftList(){
+  const wrap = document.getElementById("routineExerciseList");
+  wrap.innerHTML = "";
+  if(routineDraftExercises.length===0){
+    wrap.innerHTML = `<p class="hint">No exercises added yet.</p>`;
+    return;
+  }
+  routineDraftExercises.forEach((ex,i)=>{
+    const row = document.createElement("div");
+    row.className = "routine-draft-row";
+    row.innerHTML = `
+      <div class="routine-draft-info">
+        <b>${i+1}. ${escapeHtml(ex.name)}</b>
+        <span>${ex.sets?ex.sets+" sets · ":""}${escapeHtml(ex.reps||"")}${ex.rest?" · rest "+escapeHtml(ex.rest):""}</span>
+      </div>
+      <div class="routine-draft-actions">
+        <button data-act="up" ${i===0?"disabled":""}>↑</button>
+        <button data-act="down" ${i===routineDraftExercises.length-1?"disabled":""}>↓</button>
+        <button data-act="del">✕</button>
+      </div>`;
+    row.querySelector('[data-act="up"]').addEventListener("click", ()=>{
+      [routineDraftExercises[i-1], routineDraftExercises[i]] = [routineDraftExercises[i], routineDraftExercises[i-1]];
+      renderRoutineDraftList();
+    });
+    row.querySelector('[data-act="down"]').addEventListener("click", ()=>{
+      [routineDraftExercises[i+1], routineDraftExercises[i]] = [routineDraftExercises[i], routineDraftExercises[i+1]];
+      renderRoutineDraftList();
+    });
+    row.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      routineDraftExercises.splice(i,1); renderRoutineDraftList();
+    });
+    wrap.appendChild(row);
+  });
+}
+function openRoutineSheet(routine){
+  editingRoutineId = routine ? routine.id : null;
+  document.getElementById("routineFormTitle").textContent = routine ? "Edit routine" : "Create routine";
+  document.getElementById("routineNameInput").value = routine ? routine.name : "";
+  routineDraftExercises = routine ? JSON.parse(JSON.stringify(routine.exercises)) : [];
+  populateRoutinePicker();
+  renderRoutineDraftList();
+  showSheet("routineBackdrop");
+}
+document.getElementById("createRoutineBtn").addEventListener("click", ()=> openRoutineSheet(null));
+document.getElementById("routineCancelBtn").addEventListener("click", ()=> hideSheet("routineBackdrop"));
+document.getElementById("routineAddExerciseBtn").addEventListener("click", ()=>{
+  const sel = document.getElementById("routineExercisePicker");
+  const opts = allExerciseOptions();
+  const chosen = opts[+sel.value];
+  if(!chosen){ toast("Pick an exercise"); return; }
+  const sets = document.getElementById("routineSetsInput").value ? +document.getElementById("routineSetsInput").value : null;
+  const reps = document.getElementById("routineRepsInput").value.trim();
+  const rest = document.getElementById("routineRestInput").value.trim();
+  routineDraftExercises.push({name:chosen.name, sets, reps, rest, sourceType:chosen.sourceType, sourceId:chosen.sourceId||null});
+  document.getElementById("routineSetsInput").value = "";
+  document.getElementById("routineRepsInput").value = "";
+  document.getElementById("routineRestInput").value = "";
+  renderRoutineDraftList();
+});
+document.getElementById("routineSaveBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("routineNameInput").value.trim();
+  if(!name){ toast("Routine name is required"); return; }
+  if(routineDraftExercises.length===0){ toast("Add at least one exercise"); return; }
+  if(editingRoutineId){
+    const idx = state.routines.findIndex(r=>r.id===editingRoutineId);
+    if(idx>-1) state.routines[idx] = {...state.routines[idx], name, exercises:routineDraftExercises};
+  } else {
+    state.routines.push({id:Date.now()+"", name, exercises:routineDraftExercises});
+  }
+  saveState();
+  hideSheet("routineBackdrop");
+  renderRoutines();
+  toast("Routine saved");
+});
+
+function renderRoutines(){
+  document.getElementById("routineSessionActive").classList.toggle("hidden", !activeSessionId);
+  document.getElementById("routinesListWrap").classList.toggle("hidden", !!activeSessionId);
+  if(activeSessionId){ renderActiveSession(); return; }
+
+  const list = document.getElementById("routinesList");
+  list.innerHTML = "";
+  if(state.routines.length===0){
+    list.innerHTML = `<p class="hint">No routines yet. Create one to reuse it anytime.</p>`;
+  }
+  state.routines.forEach(r=>{
+    const card = document.createElement("div");
+    card.className = "goal-card";
+    card.innerHTML = `
+      <div class="goal-title">${escapeHtml(r.name)}</div>
+      <div class="hint">${r.exercises.length} exercise${r.exercises.length!==1?"s":""}</div>
+      <div class="goal-actions">
+        <button class="mini-btn" data-act="start">Start Routine</button>
+        <button class="mini-btn" data-act="edit">Edit</button>
+        <button class="mini-btn" data-act="dup">Duplicate</button>
+        <button class="mini-btn delete" data-act="del">Delete</button>
+      </div>`;
+    card.querySelector('[data-act="start"]').addEventListener("click", ()=> startRoutineSession(r));
+    card.querySelector('[data-act="edit"]').addEventListener("click", ()=> openRoutineSheet(r));
+    card.querySelector('[data-act="dup"]').addEventListener("click", ()=>{
+      state.routines.push({...JSON.parse(JSON.stringify(r)), id:Date.now()+"", name:r.name+" (copy)"});
+      saveState(); renderRoutines(); toast("Routine duplicated");
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      if(!confirm("Delete this routine? Its past sessions stay in your history.")) return;
+      state.routines = state.routines.filter(x=>x.id!==r.id);
+      saveState(); renderRoutines(); toast("Routine deleted");
+    });
+    list.appendChild(card);
+  });
+
+  const recentWrap = document.getElementById("recentSessionsList");
+  recentWrap.innerHTML = "";
+  const recent = [...state.routineWorkoutLogs].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,10);
+  if(recent.length===0){
+    recentWrap.innerHTML = `<p class="hint">No sessions logged yet.</p>`;
+  }
+  recent.forEach(s=>{
+    const total = s.exercises.reduce((sum,e)=> sum+(e.targetSets||1),0);
+    const done = s.exercises.reduce((sum,e)=> sum+e.loggedSets.filter(Boolean).length,0);
+    const cls = done>=total && total>0 ? "pill-excellent" : (done>0 ? "pill-fair" : "pill-poor");
+    const label = done>=total && total>0 ? "Done" : (done>0 ? "Partial" : "Not started");
+    const row = document.createElement("div");
+    row.className = "history-row";
+    row.innerHTML = `
+      <div>
+        <div class="history-date">${escapeHtml(s.routineName)}</div>
+        <div class="history-focus">${new Date(s.date).toLocaleDateString(undefined,{day:"numeric",month:"short"})} · ${done}/${total} sets</div>
+      </div>
+      <span class="rating-pill ${cls}">${label}</span>`;
+    row.addEventListener("click", ()=>{ activeSessionId = s.id; renderRoutines(); });
+    recentWrap.appendChild(row);
+  });
+}
+function startRoutineSession(routine){
+  const session = {
+    id: Date.now()+"",
+    date: todayKey(),
+    routineId: routine.id,
+    routineName: routine.name,
+    exercises: routine.exercises.map(e=>({
+      name: e.name, targetSets: e.sets||1, targetReps: e.reps||e.duration||"", loggedSets: Array(e.sets||1).fill(false)
+    })),
+    completedAt: null,
+  };
+  state.routineWorkoutLogs.push(session);
+  saveState();
+  activeSessionId = session.id;
+  renderRoutines();
+}
+document.getElementById("closeSessionBtn").addEventListener("click", ()=>{
+  activeSessionId = null;
+  renderRoutines();
+});
+function renderActiveSession(){
+  const session = state.routineWorkoutLogs.find(s=>s.id===activeSessionId);
+  if(!session){ activeSessionId=null; renderRoutines(); return; }
+  document.getElementById("activeSessionLabel").textContent =
+    `${session.routineName} — ${new Date(session.date).toLocaleDateString(undefined,{day:"numeric",month:"short"})}`;
+  const list = document.getElementById("sessionExerciseList");
+  list.innerHTML = "";
+  let total=0, done=0;
+  session.exercises.forEach((ex,exIdx)=>{
+    total += ex.targetSets;
+    done += ex.loggedSets.filter(Boolean).length;
+    const card = document.createElement("div");
+    card.className = "workout-exercise-card" + (ex.loggedSets.every(Boolean)?" complete":"");
+    const pips = ex.loggedSets.map((on,si)=>`<div class="set-pip ${on?"done":""}" data-ex="${exIdx}" data-set="${si}">${si+1}</div>`).join("");
+    card.innerHTML = `
+      <div class="workout-ex-top">
+        <div>
+          <div class="workout-ex-name">${escapeHtml(ex.name)}</div>
+          <div class="workout-ex-target">${ex.targetSets} sets ${ex.targetReps?"× "+escapeHtml(ex.targetReps):""}</div>
+        </div>
+      </div>
+      <div class="set-pips">${pips}</div>`;
+    card.querySelectorAll(".set-pip").forEach(pip=>{
+      pip.addEventListener("click", ()=>{
+        const si = +pip.dataset.set;
+        ex.loggedSets[si] = !ex.loggedSets[si];
+        session.completedAt = session.exercises.every(e=>e.loggedSets.every(Boolean)) ? todayKey() : null;
+        saveState();
+        renderActiveSession();
+      });
+    });
+    list.appendChild(card);
+  });
+  const pct = total ? done/total : 0;
+  const r = ratingLabel(pct);
+  document.getElementById("sessionRating").innerHTML =
+    `<span>Progress: <b class="mono">${done}/${total} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
+}
 document.getElementById("stepsInput").addEventListener("input", (e)=>{
   state.stepLogs[todayKey()] = +e.target.value || 0;
   saveState();
@@ -876,7 +1365,7 @@ function renderAnalytics(){
     for(let d=1; d<=m.days; d++){
       const key = fmtDate(new Date(start.getFullYear(), start.getMonth(), d));
       const log = state.dailyLogs[key] || [];
-      done += log.filter(Boolean).length;
+      done += state.habits.daily.filter((h,hi)=> entryCountsAsDone(log[hi], h)).length;
     }
     const possible = dailyTotal*m.days;
     ytdDone += done; ytdPossible += possible;
@@ -962,135 +1451,258 @@ function renderAnalytics(){
     options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
       scales:{y:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
   });
-}
 
-/* ---------- MONEY ---------- */
-let currentMoneyIdx = monthIndexOf(new Date());
-document.getElementById("prevMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+11)%12; renderMoney(); });
-document.getElementById("nextMoneyMonth").addEventListener("click", ()=>{ currentMoneyIdx=(currentMoneyIdx+1)%12; renderMoney(); });
-let moneyChartInstance = null, categoryChartInstance = null;
-
-function ensureMoneyEntry(i){
-  if(!state.money[i]) state.money[i] = {income:0, fixed:0, expenses:[]};
-  if(!Array.isArray(state.money[i].expenses)) state.money[i].expenses = [];
-  return state.money[i];
-}
-function currentMoneyEntry(){ return state.money[currentMoneyIdx] || {income:0, fixed:0, expenses:[]}; }
-
-function renderMoney(){
-  const m = MONTHS[currentMoneyIdx];
-  document.getElementById("moneyMonthLabel").textContent = `${m.name} ${m.year}`;
-  const entry = currentMoneyEntry();
-  document.getElementById("incomeInput").value = entry.income || "";
-  document.getElementById("fixedInput").value = entry.fixed || "";
-  document.getElementById("initialBalanceInput").value = state.money.initialBalance || "";
-  renderExpenseList();
-  renderCategoryChips();
-  updateMoneyDerived();
-  renderMoneyChart();
-  renderCategoryChart();
-}
-function updateMoneyDerived(){
-  const income = +document.getElementById("incomeInput").value || 0;
-  const fixed = +document.getElementById("fixedInput").value || 0;
-  const variable = monthExpensesTotal(currentMoneyEntry());
-  const savings = income - fixed - variable;
-  const rate = income ? (savings/income)*100 : 0;
-  document.getElementById("savingsOut").textContent = "₹" + savings.toLocaleString("en-IN");
-  document.getElementById("savingsRateOut").textContent = Math.round(rate) + "%";
-
-  let cumulative = state.money.initialBalance || 0;
-  for(let i=0;i<=currentMoneyIdx;i++){
-    if(i===currentMoneyIdx){ cumulative += savings; }
-    else { cumulative += monthSavings(i); }
+  /* Habit insights: numeric target completion + best numeric habit + completion by time of day */
+  const numericHabits = state.habits.daily.map((h,i)=>({h,i})).filter(x=>habitType(x.h)==="numeric");
+  if(numericHabits.length>0){
+    const perHabitPct = numericHabits.map(({h,i})=>{
+      let sum=0, count=0;
+      Object.keys(state.dailyLogs).forEach(dateKey=>{
+        const log = state.dailyLogs[dateKey];
+        if(log && log[i]!==undefined){ sum += entryProgress(log[i],h).pct; count++; }
+      });
+      return {name:habitName(h), avg: count? sum/count : 0};
+    });
+    const overallNumericAvg = perHabitPct.reduce((s,p)=>s+p.avg,0)/perHabitPct.length;
+    document.getElementById("anaNumericAvg").textContent = Math.round(overallNumericAvg*100)+"%";
+    const best = perHabitPct.reduce((b,p)=> p.avg>b.avg?p:b, perHabitPct[0]);
+    document.getElementById("anaBestNumeric").textContent = best.avg>0 ? best.name : "—";
+  } else {
+    document.getElementById("anaNumericAvg").textContent = "—";
+    document.getElementById("anaBestNumeric").textContent = "—";
   }
-  document.getElementById("runningBalanceOut").textContent = "₹" + cumulative.toLocaleString("en-IN");
+  const timeWrap = document.getElementById("anaTimeOfDayList");
+  timeWrap.innerHTML = TIME_ORDER.map(t=>{
+    const idxs = state.habits.daily.map((h,i)=>({h,i})).filter(x=>habitTime(x.h)===t);
+    if(idxs.length===0) return "";
+    let sum=0,count=0;
+    Object.keys(state.dailyLogs).forEach(dateKey=>{
+      const log = state.dailyLogs[dateKey];
+      idxs.forEach(({h,i})=>{ if(log && log[i]!==undefined){ sum += entryCountsAsDone(log[i],h)?1:0; count++; } });
+    });
+    const pct = count ? Math.round((sum/count)*100) : 0;
+    return `<div class="time-of-day-row"><span>${TIME_LABELS[t]}</span><b class="mono">${pct}%</b></div>`;
+  }).join("");
+
+  /* Fitness extras */
+  document.getElementById("anaCustomWorkouts").textContent = state.routineWorkoutLogs.filter(s=>s.completedAt).length;
+  let customUsage = 0;
+  const customNames = new Set(state.customExercises.map(e=>e.name));
+  state.routineWorkoutLogs.forEach(s=> s.exercises.forEach(e=>{ if(customNames.has(e.name)) customUsage++; }));
+  document.getElementById("anaCustomExUsage").textContent = customUsage;
+
+  /* Money summary */
+  const {start:wS, end:wE} = weekRangeFor(new Date());
+  const wTx = txInRange(wS,wE);
+  const wIncome = sumTx(wTx,"income"), wExpense = sumTx(wTx,"expense");
+  document.getElementById("anaWeekIncome").textContent = "₹"+wIncome.toLocaleString("en-IN");
+  document.getElementById("anaWeekExpense").textContent = "₹"+wExpense.toLocaleString("en-IN");
+  document.getElementById("anaWeekSaved").textContent = "₹"+(wIncome-wExpense).toLocaleString("en-IN");
+
+  const curMonthIdx = monthIndexOf(new Date());
+  const mIncome = monthIncome(curMonthIdx), mExpense = monthExpenseTotal(curMonthIdx);
+  const mRate = mIncome ? Math.round(((mIncome-mExpense)/mIncome)*100) : 0;
+  document.getElementById("anaMonthIncome").textContent = "₹"+mIncome.toLocaleString("en-IN");
+  document.getElementById("anaMonthExpense").textContent = "₹"+mExpense.toLocaleString("en-IN");
+  document.getElementById("anaMonthRate").textContent = mRate+"%";
+  document.getElementById("anaAvgDailySpend").textContent = "₹"+Math.round(mExpense/MONTHS[curMonthIdx].days).toLocaleString("en-IN");
 }
-["incomeInput","fixedInput"].forEach(id=>{
-  document.getElementById(id).addEventListener("input", ()=>{
-    const entry = ensureMoneyEntry(currentMoneyIdx);
-    entry.income = +document.getElementById("incomeInput").value || 0;
-    entry.fixed = +document.getElementById("fixedInput").value || 0;
-    saveState();
-    updateMoneyDerived();
-    renderMoneyChart();
+
+/* ---------- MONEY (daily transaction system) ---------- */
+let txEditType = "expense";
+let editingTxId = null;
+let moneyMonthIdx = monthIndexOf(new Date());
+let moneySeg = "today";
+let moneyChartInstance=null, categoryChartInstance=null, dailyTrendChartInstance=null, weekCompareChartInstance=null;
+
+document.querySelectorAll("#txTypeSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#txTypeSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    txEditType = b.dataset.txtype;
+    populateTxCategoryOptions();
   });
 });
+function populateTxCategoryOptions(){
+  const sel = document.getElementById("txCategoryInput");
+  const cats = txEditType==="income" ? state.incomeCategories : state.expenseCategories;
+  sel.innerHTML = cats.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("");
+}
+document.getElementById("addTxBtn").addEventListener("click", ()=>{
+  const amount = +document.getElementById("txAmountInput").value;
+  const category = document.getElementById("txCategoryInput").value;
+  const date = document.getElementById("txDateInput").value || todayKey();
+  const note = document.getElementById("txNoteInput").value.trim();
+  if(!amount || amount<=0){ toast("Enter a valid amount"); return; }
+  if(editingTxId){
+    const tx = state.transactions.find(t=>t.id===editingTxId);
+    if(tx){ tx.type=txEditType; tx.amount=amount; tx.category=category; tx.date=date; tx.note=note; }
+    editingTxId = null;
+    document.getElementById("addTxBtn").textContent = "+ Add transaction";
+    document.getElementById("cancelTxEditBtn").classList.add("hidden");
+    toast("Transaction updated");
+  } else {
+    state.transactions.push({id:Date.now()+"", type:txEditType, amount, category, date, note});
+    toast("Transaction added");
+  }
+  saveState();
+  document.getElementById("txAmountInput").value = "";
+  document.getElementById("txNoteInput").value = "";
+  renderMoney();
+});
+document.getElementById("cancelTxEditBtn").addEventListener("click", ()=>{
+  editingTxId = null;
+  document.getElementById("addTxBtn").textContent = "+ Add transaction";
+  document.getElementById("cancelTxEditBtn").classList.add("hidden");
+  document.getElementById("txAmountInput").value = "";
+  document.getElementById("txNoteInput").value = "";
+});
+function beginEditTx(tx){
+  editingTxId = tx.id;
+  txEditType = tx.type;
+  document.querySelectorAll("#txTypeSeg .seg-btn").forEach(x=> x.classList.toggle("active", x.dataset.txtype===tx.type));
+  populateTxCategoryOptions();
+  document.getElementById("txAmountInput").value = tx.amount;
+  document.getElementById("txCategoryInput").value = tx.category;
+  document.getElementById("txDateInput").value = tx.date;
+  document.getElementById("txNoteInput").value = tx.note||"";
+  document.getElementById("addTxBtn").textContent = "Update transaction";
+  document.getElementById("cancelTxEditBtn").classList.remove("hidden");
+  window.scrollTo(0,0);
+}
+function deleteTx(id){
+  if(!confirm("Delete this transaction?")) return;
+  state.transactions = state.transactions.filter(t=>t.id!==id);
+  saveState();
+  renderMoney();
+  toast("Transaction deleted");
+}
+
+document.querySelectorAll("#moneySeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#moneySeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    moneySeg = b.dataset.mseg2;
+    ["today","week","month","history"].forEach(s=> document.getElementById("mseg-"+s).classList.toggle("hidden", s!==moneySeg));
+    renderMoney();
+  });
+});
+document.getElementById("prevMoneyMonth").addEventListener("click", ()=>{ moneyMonthIdx=(moneyMonthIdx+11)%12; renderMoney(); });
+document.getElementById("nextMoneyMonth").addEventListener("click", ()=>{ moneyMonthIdx=(moneyMonthIdx+1)%12; renderMoney(); });
+
 document.getElementById("initialBalanceInput").addEventListener("input", (e)=>{
   state.money.initialBalance = +e.target.value || 0;
   saveState();
-  updateMoneyDerived();
+  renderMoney();
 });
 
-/* itemized expenses */
-function renderExpenseList(){
-  const wrap = document.getElementById("expenseList");
-  wrap.innerHTML = "";
-  const entry = ensureMoneyEntry(currentMoneyIdx);
-  if(entry.expenses.length===0){
-    wrap.innerHTML = `<p class="hint">No expenses logged for this month yet.</p>`;
-    return;
+function renderMoney(){
+  document.getElementById("initialBalanceInput").value = state.money.initialBalance || "";
+  document.getElementById("txDateInput").value = document.getElementById("txDateInput").value || todayKey();
+  populateTxCategoryOptions();
+
+  if(moneySeg==="today") renderMoneyToday();
+  else if(moneySeg==="week") renderMoneyWeek();
+  else if(moneySeg==="month") renderMoneyMonth();
+  else renderMoneyHistory();
+
+  renderCategoryManagement();
+}
+
+function renderMoneyToday(){
+  const key = todayKey();
+  const txs = txOnDate(key);
+  const income = sumTx(txs,"income"), spent = sumTx(txs,"expense"), saved = income-spent;
+  document.getElementById("todayIncomeOut").textContent = "₹"+income.toLocaleString("en-IN");
+  document.getElementById("todaySpentOut").textContent = "₹"+spent.toLocaleString("en-IN");
+  document.getElementById("todaySavedOut").textContent = (saved<0?"-":"")+"₹"+Math.abs(saved).toLocaleString("en-IN");
+
+  const catTotals = {};
+  txs.filter(t=>t.type==="expense").forEach(t=> catTotals[t.category]=(catTotals[t.category]||0)+t.amount);
+  const wrap = document.getElementById("todaySpendingList");
+  const cats = Object.keys(catTotals);
+  wrap.innerHTML = cats.length ? cats.map(c=>`<div class="spend-row"><span>${escapeHtml(c)}</span><b class="mono">₹${catTotals[c].toLocaleString("en-IN")}</b></div>`).join("")
+    : `<p class="hint">No spending logged today.</p>`;
+
+  let cumulative = state.money.initialBalance || 0;
+  const allSorted = [...state.transactions].sort((a,b)=> a.date.localeCompare(b.date));
+  allSorted.forEach(t=>{ if(t.date<=key) cumulative += (t.type==="income"?t.amount:-t.amount); });
+  document.getElementById("runningBalanceOut").textContent = "₹"+cumulative.toLocaleString("en-IN");
+}
+
+function renderMoneyWeek(){
+  const {start,end} = weekRangeFor(new Date());
+  const txs = txInRange(start,end);
+  const income = sumTx(txs,"income"), spent = sumTx(txs,"expense"), saved = income-spent;
+  const rate = income ? Math.round((saved/income)*100) : 0;
+  document.getElementById("weekIncomeOut").textContent = "₹"+income.toLocaleString("en-IN");
+  document.getElementById("weekSpentOut").textContent = "₹"+spent.toLocaleString("en-IN");
+  document.getElementById("weekSavedOut").textContent = (saved<0?"-":"")+"₹"+Math.abs(saved).toLocaleString("en-IN");
+  document.getElementById("weekRateOut").textContent = rate+"%";
+
+  const catTotals = {};
+  txs.filter(t=>t.type==="expense").forEach(t=> catTotals[t.category]=(catTotals[t.category]||0)+t.amount);
+  const wrap = document.getElementById("weekCategoryList");
+  const cats = Object.keys(catTotals);
+  wrap.innerHTML = cats.length ? cats.map(c=>`<div class="spend-row"><span>${escapeHtml(c)}</span><b class="mono">₹${catTotals[c].toLocaleString("en-IN")}</b></div>`).join("")
+    : `<p class="hint">No spending logged this week.</p>`;
+
+  const ctx = document.getElementById("weekCompareChart");
+  if(weekCompareChartInstance) weekCompareChartInstance.destroy();
+  weekCompareChartInstance = new Chart(ctx, {
+    type:"bar",
+    data:{labels:["Income","Spent","Saved"], datasets:[{data:[income,spent,saved], backgroundColor:["#8FE3D0","#F4879C","#F9C74F"], borderRadius:6}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+  });
+}
+
+function renderMoneyMonth(){
+  const m = MONTHS[moneyMonthIdx];
+  document.getElementById("moneyMonthLabel").textContent = `${m.name} ${m.year}`;
+  const income = monthIncome(moneyMonthIdx), spent = monthExpenseTotal(moneyMonthIdx), saved = income-spent;
+  const rate = income ? Math.round((saved/income)*100) : 0;
+  document.getElementById("monthIncomeOut").textContent = "₹"+income.toLocaleString("en-IN");
+  document.getElementById("monthSpentOut").textContent = "₹"+spent.toLocaleString("en-IN");
+  document.getElementById("monthSavedOut").textContent = (saved<0?"-":"")+"₹"+Math.abs(saved).toLocaleString("en-IN");
+  document.getElementById("monthRateOut").textContent = rate+"%";
+  document.getElementById("monthAvgSpendOut").textContent = "₹"+Math.round(spent/m.days).toLocaleString("en-IN");
+  document.getElementById("monthAvgSaveOut").textContent = "₹"+Math.round(saved/m.days).toLocaleString("en-IN");
+
+  const {start,end} = monthRangeForIndex(moneyMonthIdx);
+  const txs = txInRange(start,end);
+  const catTotals = {};
+  txs.filter(t=>t.type==="expense").forEach(t=> catTotals[t.category]=(catTotals[t.category]||0)+t.amount);
+  const catLabels = Object.keys(catTotals);
+  const ctxCat = document.getElementById("categoryChart");
+  if(categoryChartInstance) categoryChartInstance.destroy();
+  if(catLabels.length>0){
+    categoryChartInstance = new Chart(ctxCat, {
+      type:"bar",
+      data:{labels:catLabels, datasets:[{data:catLabels.map(l=>catTotals[l]), backgroundColor:"#C9A6F7", borderRadius:6}]},
+      options:{indexAxis:"y", responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+        scales:{x:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, y:{ticks:{color:"#8991B3"},grid:{display:false}}}}
+    });
   }
-  entry.expenses.forEach((exp)=>{
-    const row = document.createElement("div");
-    row.className = "expense-row";
-    const options = state.expenseCategories.map(c=>
-      `<option value="${escapeAttr(c)}" ${c===exp.category?"selected":""}>${escapeHtml(c)}</option>`).join("");
-    row.innerHTML = `
-      <select>${options}</select>
-      <input type="number" inputmode="numeric" value="${exp.amount||0}" placeholder="₹" />
-      <button aria-label="Remove">✕</button>`;
-    row.querySelector("select").addEventListener("change",(e)=>{
-      exp.category = e.target.value; saveState(); renderCategoryChart();
-    });
-    row.querySelector("input").addEventListener("input",(e)=>{
-      exp.amount = +e.target.value || 0;
-      saveState();
-      updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
-    });
-    row.querySelector("button").addEventListener("click", ()=>{
-      entry.expenses = entry.expenses.filter(x=>x.id!==exp.id);
-      saveState();
-      renderExpenseList(); updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
-    });
-    wrap.appendChild(row);
-  });
-}
-document.getElementById("addExpenseBtn").addEventListener("click", ()=>{
-  const entry = ensureMoneyEntry(currentMoneyIdx);
-  entry.expenses.push({id:Date.now()+"", category: state.expenseCategories[0]||"Misc", amount:0, note:""});
-  saveState();
-  renderExpenseList(); updateMoneyDerived(); renderMoneyChart(); renderCategoryChart();
-});
 
-/* category management */
-function renderCategoryChips(){
-  const wrap = document.getElementById("categoryChips");
-  wrap.innerHTML = "";
-  state.expenseCategories.forEach(cat=>{
-    const chip = document.createElement("div");
-    chip.className = "chip";
-    chip.innerHTML = `<span>${escapeHtml(cat)}</span><button aria-label="Remove category">✕</button>`;
-    chip.querySelector("button").addEventListener("click", ()=>{
-      if(state.expenseCategories.length<=1){ toast("Keep at least one category"); return; }
-      state.expenseCategories = state.expenseCategories.filter(c=>c!==cat);
-      saveState();
-      renderCategoryChips(); renderExpenseList(); renderCategoryChart();
-    });
-    wrap.appendChild(chip);
+  const dayLabels=[], dayData=[];
+  const start_ = monthStartDate(moneyMonthIdx);
+  for(let d=1; d<=m.days; d++){
+    const key = fmtDate(new Date(start_.getFullYear(), start_.getMonth(), d));
+    dayLabels.push(String(d));
+    dayData.push(sumTx(txOnDate(key),"expense"));
+  }
+  const ctxDaily = document.getElementById("dailyTrendChart");
+  if(dailyTrendChartInstance) dailyTrendChartInstance.destroy();
+  dailyTrendChartInstance = new Chart(ctxDaily, {
+    type:"bar",
+    data:{labels:dayLabels, datasets:[{data:dayData, backgroundColor:"#F4879C", borderRadius:4}]},
+    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:"#8991B3"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3",maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{display:false}}}}
   });
-}
-document.getElementById("addCategoryBtn").addEventListener("click", ()=>{
-  const input = document.getElementById("newCategoryInput");
-  const val = input.value.trim();
-  if(!val){ return; }
-  if(state.expenseCategories.includes(val)){ toast("Category already exists"); return; }
-  state.expenseCategories.push(val);
-  saveState();
-  input.value = "";
-  renderCategoryChips();
-});
 
+  renderMoneyChart();
+}
 function renderMoneyChart(){
   const labels = MONTHS.map(m=>m.name.slice(0,3));
   const data = MONTHS.map((m,i)=> monthSavings(i));
@@ -1102,38 +1714,111 @@ function renderMoneyChart(){
     options:{
       responsive:true, animation:{duration:700, easing:"easeOutQuart"},
       plugins:{legend:{display:false}},
-      scales:{
-        y:{ticks:{color:"#8991B3"}, grid:{color:"#2D2D44"}},
-        x:{ticks:{color:"#8991B3"}, grid:{display:false}}
-      }
+      scales:{ y:{ticks:{color:"#8991B3"}, grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"}, grid:{display:false}} }
     }
   });
 }
-function renderCategoryChart(){
-  const entry = currentMoneyEntry();
-  const totals = {};
-  (entry.expenses||[]).forEach(exp=>{
-    totals[exp.category] = (totals[exp.category]||0) + (exp.amount||0);
-  });
-  const labels = Object.keys(totals);
-  const data = labels.map(l=>totals[l]);
-  const ctx = document.getElementById("categoryChart");
-  if(categoryChartInstance) categoryChartInstance.destroy();
-  if(labels.length===0){ return; }
-  categoryChartInstance = new Chart(ctx, {
-    type:"bar",
-    data:{ labels, datasets:[{ data, backgroundColor:"#C9A6F7", borderRadius:6 }]},
-    options:{
-      indexAxis:"y",
-      responsive:true, animation:{duration:700, easing:"easeOutQuart"},
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:"#8991B3"}, grid:{color:"#2D2D44"}},
-        y:{ticks:{color:"#8991B3"}, grid:{display:false}}
-      }
+
+function populateHistoryCategoryFilter(){
+  const sel = document.getElementById("histFilterCategory");
+  const all = [...new Set([...state.incomeCategories, ...state.expenseCategories])];
+  sel.innerHTML = `<option value="all">All categories</option>` + all.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join("");
+}
+["histFilterType","histFilterCategory","histFilterFrom","histFilterTo"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", renderMoneyHistory);
+  document.getElementById(id).addEventListener("change", renderMoneyHistory);
+});
+function renderMoneyHistory(){
+  populateHistoryCategoryFilter();
+  const typeF = document.getElementById("histFilterType").value;
+  const catF = document.getElementById("histFilterCategory").value;
+  const fromF = document.getElementById("histFilterFrom").value;
+  const toF = document.getElementById("histFilterTo").value;
+
+  let list = [...state.transactions];
+  if(typeF!=="all") list = list.filter(t=>t.type===typeF);
+  if(catF!=="all") list = list.filter(t=>t.category===catF);
+  if(fromF) list = list.filter(t=>t.date>=fromF);
+  if(toF) list = list.filter(t=>t.date<=toF);
+  list.sort((a,b)=> b.date.localeCompare(a.date));
+
+  const wrap = document.getElementById("historyTxList");
+  wrap.innerHTML = "";
+  if(list.length===0){ wrap.innerHTML = `<p class="hint">No transactions match these filters.</p>`; return; }
+
+  const todayStr = todayKey();
+  const yestStr = fmtDate(new Date(Date.now()-86400000));
+  let lastHeader = null;
+  list.forEach(t=>{
+    const headerLabel = t.date===todayStr ? "Today" : t.date===yestStr ? "Yesterday" : new Date(t.date).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+    if(headerLabel!==lastHeader){
+      const h = document.createElement("div");
+      h.className = "tx-day-header";
+      h.textContent = headerLabel;
+      wrap.appendChild(h);
+      lastHeader = headerLabel;
     }
+    const row = document.createElement("div");
+    row.className = "tx-row";
+    row.innerHTML = `
+      <div>
+        <div class="tx-amount ${t.type}">${t.type==="income"?"+":"−"}₹${t.amount.toLocaleString("en-IN")}</div>
+        <div class="tx-meta">${escapeHtml(t.category)}${t.note?" · "+escapeHtml(t.note):""}</div>
+      </div>
+      <div class="tx-actions">
+        <button class="task-icon-btn" data-act="edit">✎</button>
+        <button class="task-icon-btn" data-act="del">✕</button>
+      </div>`;
+    row.querySelector('[data-act="edit"]').addEventListener("click", ()=> beginEditTx(t));
+    row.querySelector('[data-act="del"]').addEventListener("click", ()=> deleteTx(t.id));
+    wrap.appendChild(row);
   });
 }
+
+function renderCategoryManagement(){
+  const incWrap = document.getElementById("incomeCategoryChips");
+  incWrap.innerHTML = "";
+  state.incomeCategories.forEach(cat=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.innerHTML = `<span>${escapeHtml(cat)}</span><button aria-label="Remove">✕</button>`;
+    chip.querySelector("button").addEventListener("click", ()=>{
+      if(state.incomeCategories.length<=1){ toast("Keep at least one category"); return; }
+      state.incomeCategories = state.incomeCategories.filter(c=>c!==cat);
+      saveState(); renderCategoryManagement(); populateTxCategoryOptions();
+    });
+    incWrap.appendChild(chip);
+  });
+  const expWrap = document.getElementById("expenseCategoryChips");
+  expWrap.innerHTML = "";
+  state.expenseCategories.forEach(cat=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.innerHTML = `<span>${escapeHtml(cat)}</span><button aria-label="Remove">✕</button>`;
+    chip.querySelector("button").addEventListener("click", ()=>{
+      if(state.expenseCategories.length<=1){ toast("Keep at least one category"); return; }
+      state.expenseCategories = state.expenseCategories.filter(c=>c!==cat);
+      saveState(); renderCategoryManagement(); populateTxCategoryOptions();
+    });
+    expWrap.appendChild(chip);
+  });
+}
+document.getElementById("addIncomeCategoryBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("newIncomeCategoryInput");
+  const val = input.value.trim();
+  if(!val) return;
+  if(state.incomeCategories.includes(val)){ toast("Category already exists"); return; }
+  state.incomeCategories.push(val);
+  saveState(); input.value=""; renderCategoryManagement(); populateTxCategoryOptions();
+});
+document.getElementById("addExpenseCategoryBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("newExpenseCategoryInput");
+  const val = input.value.trim();
+  if(!val) return;
+  if(state.expenseCategories.includes(val)){ toast("Category already exists"); return; }
+  state.expenseCategories.push(val);
+  saveState(); input.value=""; renderCategoryManagement(); populateTxCategoryOptions();
+});
 
 /* ---------- GOALS ---------- */
 document.getElementById("addGoalBtn").addEventListener("click", ()=>{
@@ -1450,6 +2135,124 @@ function checkTaskReminders(){
   if(changed) saveState();
 }
 
+/* ---------- CUSTOM SECTION BACKGROUNDS ---------- */
+const BG_SECTIONS = [
+  {id:"home", label:"Home"},
+  {id:"habits", label:"Habits"},
+  {id:"fitness", label:"Fitness"},
+  {id:"analytics", label:"Analytics"},
+  {id:"money", label:"Money"},
+  {id:"goals", label:"Goals"},
+  {id:"learn", label:"Learn"},
+  {id:"calendar", label:"Calendar"},
+];
+const BG_MAX_DIM = 1000;
+const BG_JPEG_QUALITY = 0.72;
+
+function applySectionBackgrounds(){
+  BG_SECTIONS.forEach(s=>{
+    const el = document.getElementById("view-"+s.id);
+    if(!el) return;
+    const data = state.settings.sectionBackgrounds && state.settings.sectionBackgrounds[s.id];
+    if(data){
+      el.style.setProperty("--custom-bg-url", `url("${data}")`);
+      el.classList.add("has-custom-bg");
+    } else {
+      el.style.removeProperty("--custom-bg-url");
+      el.classList.remove("has-custom-bg");
+    }
+  });
+}
+
+function resizeImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const objUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{
+      let {width, height} = img;
+      if(width > BG_MAX_DIM || height > BG_MAX_DIM){
+        const ratio = Math.min(BG_MAX_DIM/width, BG_MAX_DIM/height);
+        width = Math.round(width*ratio);
+        height = Math.round(height*ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objUrl);
+      resolve(canvas.toDataURL("image/jpeg", BG_JPEG_QUALITY));
+    };
+    img.onerror = (e)=>{ URL.revokeObjectURL(objUrl); reject(e); };
+    img.src = objUrl;
+  });
+}
+
+function updateBgStorageUsed(){
+  const bytes = JSON.stringify(state.settings.sectionBackgrounds || {}).length;
+  const kb = bytes/1024;
+  const label = kb > 1024 ? (kb/1024).toFixed(2)+" MB" : Math.round(kb)+" KB";
+  const el = document.getElementById("bgStorageUsed");
+  if(el) el.textContent = label;
+}
+
+function renderBgSectionList(){
+  const wrap = document.getElementById("bgSectionList");
+  if(!wrap) return;
+  wrap.innerHTML = "";
+  if(!state.settings.sectionBackgrounds) state.settings.sectionBackgrounds = {};
+  BG_SECTIONS.forEach(s=>{
+    const data = state.settings.sectionBackgrounds[s.id];
+    const row = document.createElement("div");
+    row.className = "bg-row";
+    row.innerHTML = `
+      <div class="bg-thumb" ${data?`style="background-image:url('${data}')"`:""}>${data?"":"No image"}</div>
+      <div class="bg-row-label">${escapeHtml(s.label)}</div>
+      <div class="bg-row-actions">
+        <label class="bg-pick-btn">Choose<input type="file" accept="image/*" class="hidden" data-section="${s.id}"></label>
+        <button class="bg-remove-btn" data-section="${s.id}" ${data?"":"disabled style=\"opacity:.35;pointer-events:none;\""}>✕</button>
+      </div>`;
+    row.querySelector('input[type="file"]').addEventListener("change", async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      if(!file.type.startsWith("image/")){ toast("Please choose an image file"); return; }
+      toast("Processing image…");
+      try{
+        const dataUrl = await resizeImageFile(file);
+        state.settings.sectionBackgrounds[s.id] = dataUrl;
+        saveState();
+        applySectionBackgrounds();
+        renderBgSectionList();
+        updateBgStorageUsed();
+        toast(`${s.label} background set`);
+      }catch(err){
+        toast("Couldn't process that image");
+      }
+    });
+    const removeBtn = row.querySelector(".bg-remove-btn");
+    if(data){
+      removeBtn.addEventListener("click", ()=>{
+        delete state.settings.sectionBackgrounds[s.id];
+        saveState();
+        applySectionBackgrounds();
+        renderBgSectionList();
+        updateBgStorageUsed();
+        toast(`${s.label} background removed`);
+      });
+    }
+    wrap.appendChild(row);
+  });
+  updateBgStorageUsed();
+}
+document.getElementById("clearAllBgBtn").addEventListener("click", ()=>{
+  if(!confirm("Remove all custom backgrounds?")) return;
+  state.settings.sectionBackgrounds = {};
+  saveState();
+  applySectionBackgrounds();
+  renderBgSectionList();
+  updateBgStorageUsed();
+  toast("All custom backgrounds cleared");
+});
+
 let manageSeg = "daily";
 document.querySelectorAll("#manageSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
@@ -1462,20 +2265,71 @@ document.querySelectorAll("#manageSeg .seg-btn").forEach(b=>{
 function renderManageList(){
   const wrap = document.getElementById("manageList");
   wrap.innerHTML = "";
-  state.habits[manageSeg].forEach((name, idx)=>{
+  state.habits[manageSeg].forEach((h, idx)=>{
+    const type = habitType(h);
     const row = document.createElement("div");
-    row.className = "manage-row";
-    row.innerHTML = `<input type="text" value="${escapeAttr(name)}" /><button aria-label="Remove">✕</button>`;
-    row.querySelector("input").addEventListener("input", (e)=>{
-      state.habits[manageSeg][idx] = e.target.value;
+    row.className = "manage-row-wrap";
+    row.innerHTML = `
+      <div class="manage-row">
+        <input type="text" class="mh-name" value="${escapeAttr(habitName(h))}" />
+        <button class="mh-adv-toggle" type="button" aria-label="Advanced options">⚙</button>
+        <button aria-label="Remove">✕</button>
+      </div>
+      <div class="mh-advanced hidden">
+        <div class="mh-field-row">
+          <label class="mh-mini-label">Type
+            <select class="mh-type">
+              <option value="checkbox" ${type==="checkbox"?"selected":""}>Checkbox</option>
+              <option value="numeric" ${type==="numeric"?"selected":""}>Numeric</option>
+            </select>
+          </label>
+          <label class="mh-mini-label">Time of day
+            <select class="mh-time">
+              ${TIME_ORDER.map(t=>`<option value="${t}" ${habitTime(h)===t?"selected":""}>${TIME_LABELS[t]}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="mh-field-row mh-numeric-fields ${type==="numeric"?"":"hidden"}">
+          <input type="number" class="mh-target" placeholder="Target" value="${habitTarget(h)??""}" step="any" />
+          <input type="text" class="mh-unit" placeholder="Unit (L, min, reps…)" value="${escapeAttr(habitUnit(h))}" />
+          <input type="number" class="mh-min" placeholder="Min (optional)" value="${habitMin(h)??""}" step="any" />
+        </div>
+      </div>`;
+
+    row.querySelector(".mh-name").addEventListener("input", (e)=>{
+      state.habits[manageSeg][idx].name = e.target.value;
       saveState();
     });
-    row.querySelector("button").addEventListener("click", ()=> removeHabit(manageSeg, idx));
+    row.querySelector(".mh-adv-toggle").addEventListener("click", ()=>{
+      row.querySelector(".mh-advanced").classList.toggle("hidden");
+    });
+    row.querySelector(".mh-type").addEventListener("change", (e)=>{
+      state.habits[manageSeg][idx].type = e.target.value;
+      row.querySelector(".mh-numeric-fields").classList.toggle("hidden", e.target.value!=="numeric");
+      saveState();
+    });
+    row.querySelector(".mh-time").addEventListener("change", (e)=>{
+      state.habits[manageSeg][idx].time = e.target.value;
+      saveState();
+    });
+    row.querySelector(".mh-target").addEventListener("input", (e)=>{
+      state.habits[manageSeg][idx].target = e.target.value==="" ? null : +e.target.value;
+      saveState();
+    });
+    row.querySelector(".mh-unit").addEventListener("input", (e)=>{
+      state.habits[manageSeg][idx].unit = e.target.value;
+      saveState();
+    });
+    row.querySelector(".mh-min").addEventListener("input", (e)=>{
+      state.habits[manageSeg][idx].min = e.target.value==="" ? null : +e.target.value;
+      saveState();
+    });
+    row.querySelector('button[aria-label="Remove"]').addEventListener("click", ()=> removeHabit(manageSeg, idx));
     wrap.appendChild(row);
   });
 }
 function addHabit(cat){
-  state.habits[cat].push("New habit");
+  state.habits[cat].push({name:"New habit", type:"checkbox", target:null, unit:"", min:null, time:"anytime"});
   if(cat==="daily") Object.keys(state.dailyLogs).forEach(k=> state.dailyLogs[k].push(false));
   if(cat==="weekly") Object.keys(state.weeklyLogs).forEach(k=> state.weeklyLogs[k].push(false));
   if(cat==="monthly") Object.keys(state.monthlyLogs).forEach(k=> state.monthlyLogs[k].push(false));
@@ -1493,6 +2347,11 @@ function removeHabit(cat, idx){
   toast("Habit removed");
 }
 document.getElementById("addHabitBtn").addEventListener("click", ()=> addHabit(manageSeg));
+document.getElementById("habitGroupingToggle").addEventListener("change", (e)=>{
+  state.settings.habitGroupingOn = e.target.checked;
+  saveState();
+  renderHome();
+});
 
 /* ---------- SETTINGS ---------- */
 function renderSettings(){
@@ -1503,10 +2362,12 @@ function renderSettings(){
   document.getElementById("weightToggle").checked = state.settings.weightOn;
   document.getElementById("weightDaySelect").value = String(state.settings.weightDay);
   document.getElementById("motionToggle").checked = state.settings.reduceMotion;
+  document.getElementById("habitGroupingToggle").checked = state.settings.habitGroupingOn;
   document.querySelectorAll(".theme-swatch").forEach(el=>{
     el.classList.toggle("active", el.dataset.theme === (state.settings.theme||"classic"));
   });
   renderManageList();
+  renderBgSectionList();
 }
 document.querySelectorAll(".theme-swatch").forEach(el=>{
   el.addEventListener("click", ()=>{
@@ -1594,8 +2455,7 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
   reader.readAsText(file);
 });
 function loadStateFrom(parsed){
-  const d = DEFAULT_STATE();
-  return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
+  return migrateState(mergeWithDefaults(parsed));
 }
 document.getElementById("resetBtn").addEventListener("click", ()=>{
   if(confirm("This clears all data on this device. Continue?")){
@@ -1667,3 +2527,4 @@ if("serviceWorker" in navigator){
 renderHome();
 checkTaskReminders();
 topUpRecurringTasks();
+applySectionBackgrounds();
