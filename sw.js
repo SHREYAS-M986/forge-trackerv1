@@ -1,4 +1,4 @@
-const CACHE = "forge-cache-v10";
+const CACHE = "forge-cache-v11";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./chart.min.js", "./workout-plan.js", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png",

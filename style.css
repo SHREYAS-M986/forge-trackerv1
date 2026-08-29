@@ -217,6 +217,12 @@ main{padding:0 18px 40px;}
   color:var(--text); font-size:14px; font-family:'JetBrains Mono'; outline:none; transition: border-color .2s;
 }
 .form-card input:focus{border-color:var(--gold);}
+.form-card textarea{
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px;
+  color:var(--text); font-size:14px; font-family:'Inter'; outline:none; transition: border-color .2s;
+  resize:vertical; line-height:1.6; min-height:120px;
+}
+.form-card textarea:focus{border-color:var(--gold);}
 .derived-row{display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--muted);}
 .derived-row b{color:var(--gold); font-size:15px;}
 

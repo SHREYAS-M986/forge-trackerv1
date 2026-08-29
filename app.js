@@ -124,6 +124,7 @@ const DEFAULT_STATE = () => ({
   expenseCategories: ["Food","Transport","Shopping","Bills","Entertainment","Education","Fitness","Other"],
   goals: [],
   learn: [],
+  journalEntries: {},  // "YYYY-MM-DD" -> {text, updatedAt}
   settings: {
     notifOn:false, reminderTime:"20:00", taskNotifOn:true,
     stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
@@ -391,7 +392,7 @@ document.querySelectorAll(".sheet-item").forEach(btn=>{
 });
 
 /* ---------- Navigation with slide transition ---------- */
-const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","settings"];
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","journal","settings"];
 function showView(name){
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
   const target = document.getElementById("view-"+name);
@@ -424,6 +425,7 @@ function runViewRenderer(name){
   if(name==="goals") renderGoals();
   if(name==="learn") renderLearn();
   if(name==="calendar") renderCalendar();
+  if(name==="journal") renderJournal();
   if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
@@ -2135,6 +2137,96 @@ function checkTaskReminders(){
   if(changed) saveState();
 }
 
+/* ---------- JOURNAL ---------- */
+let journalSelectedDate = todayKey();
+
+function renderJournal(){
+  const isToday = journalSelectedDate === todayKey();
+  document.getElementById("journalDateLabel").textContent = isToday
+    ? "Today"
+    : new Date(journalSelectedDate).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short",year:"numeric"});
+  document.getElementById("nextJournalDay").disabled = isToday;
+
+  const entry = state.journalEntries[journalSelectedDate];
+  const ta = document.getElementById("journalTextarea");
+  ta.value = entry ? entry.text : "";
+  updateJournalWordCount();
+  document.getElementById("journalSavedLabel").textContent = entry
+    ? `Saved ${new Date(entry.updatedAt).toLocaleString(undefined,{hour:"2-digit",minute:"2-digit",day:"numeric",month:"short"})}`
+    : "";
+
+  renderJournalEntriesList();
+}
+function updateJournalWordCount(){
+  const text = document.getElementById("journalTextarea").value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  document.getElementById("journalWordCount").textContent = `${words} word${words!==1?"s":""}`;
+}
+document.getElementById("journalTextarea").addEventListener("input", updateJournalWordCount);
+document.getElementById("prevJournalDay").addEventListener("click", ()=>{
+  const d = new Date(journalSelectedDate); d.setDate(d.getDate()-1);
+  journalSelectedDate = fmtDate(d);
+  renderJournal();
+});
+document.getElementById("nextJournalDay").addEventListener("click", ()=>{
+  if(journalSelectedDate===todayKey()) return;
+  const d = new Date(journalSelectedDate); d.setDate(d.getDate()+1);
+  journalSelectedDate = fmtDate(d);
+  renderJournal();
+});
+document.getElementById("journalSaveBtn").addEventListener("click", ()=>{
+  const text = document.getElementById("journalTextarea").value;
+  if(!text.trim()){
+    if(state.journalEntries[journalSelectedDate]){
+      delete state.journalEntries[journalSelectedDate];
+      saveState();
+      toast("Entry cleared");
+      renderJournal();
+    } else {
+      toast("Nothing to save");
+    }
+    return;
+  }
+  state.journalEntries[journalSelectedDate] = {text, updatedAt: Date.now()};
+  saveState();
+  toast("Entry saved");
+  renderJournal();
+});
+function renderJournalEntriesList(){
+  const wrap = document.getElementById("journalEntriesList");
+  wrap.innerHTML = "";
+  const dates = Object.keys(state.journalEntries).sort((a,b)=> b.localeCompare(a));
+  if(dates.length===0){ wrap.innerHTML = `<p class="hint">No entries yet — write about today above to start.</p>`; return; }
+  dates.forEach(date=>{
+    const entry = state.journalEntries[date];
+    const snippet = entry.text.length>90 ? entry.text.slice(0,90)+"…" : entry.text;
+    const row = document.createElement("div");
+    row.className = "history-row";
+    row.innerHTML = `
+      <div>
+        <div class="history-date">${date===todayKey()?"Today":new Date(date).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}</div>
+        <div class="history-focus">${escapeHtml(snippet)}</div>
+      </div>
+      <button class="task-icon-btn" data-act="del">✕</button>`;
+    row.addEventListener("click", (e)=>{
+      if(e.target.closest('[data-act="del"]')) return;
+      journalSelectedDate = date;
+      renderJournal();
+      window.scrollTo(0,0);
+    });
+    row.querySelector('[data-act="del"]').addEventListener("click", (e)=>{
+      e.stopPropagation();
+      if(!confirm("Delete this entry?")) return;
+      delete state.journalEntries[date];
+      saveState();
+      renderJournal();
+      toast("Entry deleted");
+    });
+    wrap.appendChild(row);
+  });
+}
+
+
 /* ---------- CUSTOM SECTION BACKGROUNDS ---------- */
 const BG_SECTIONS = [
   {id:"home", label:"Home"},
@@ -2145,6 +2237,7 @@ const BG_SECTIONS = [
   {id:"goals", label:"Goals"},
   {id:"learn", label:"Learn"},
   {id:"calendar", label:"Calendar"},
+  {id:"journal", label:"Journal"},
 ];
 const BG_MAX_DIM = 1000;
 const BG_JPEG_QUALITY = 0.72;
