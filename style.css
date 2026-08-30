@@ -72,7 +72,7 @@ body{
   color:var(--text);
   font-family:'Inter',system-ui,sans-serif;
   overscroll-behavior-y: contain;
-  padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(130px + env(safe-area-inset-bottom, 0px));
   min-height:100vh;
 }
 h1,h2,h3,.brand,.mono,.ring-pct,.stat-num{font-family:'Sora',sans-serif;}
@@ -102,6 +102,11 @@ h1,h2,h3,.brand,.mono,.ring-pct,.stat-num{font-family:'Sora',sans-serif;}
 }
 
 main{padding:0 18px 40px;}
+.bottom-nav-spacer{
+  height: calc(96px + env(safe-area-inset-bottom, 0px));
+  width:100%;
+  flex-shrink:0;
+}
 .view{animation: viewIn .35s var(--ease);}
 @keyframes viewIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
@@ -136,18 +141,6 @@ main{padding:0 18px 40px;}
 .stat-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
 
 .section-title{font-size:14px; font-weight:700; margin:22px 0 10px; color:var(--text); letter-spacing:.3px;}
-
-/* perfect day badge */
-.perfect-day-card{
-  display:flex; align-items:center; justify-content:space-between; gap:12px;
-  background:linear-gradient(135deg, rgba(249,199,79,.12), rgba(201,166,247,.08));
-  border:1px solid rgba(249,199,79,.35); border-radius:16px; padding:14px 16px; margin-bottom:6px;
-}
-.perfect-day-left{display:flex; align-items:center; gap:10px;}
-.perfect-day-star{font-size:22px;}
-.perfect-day-title{font-weight:700; font-size:13px;}
-.perfect-day-sub{font-size:11px; color:var(--muted); margin-top:1px;}
-.perfect-day-streak{font-family:'JetBrains Mono'; font-weight:800; font-size:20px; color:var(--gold);}
 
 .card-list{display:flex; flex-direction:column; gap:10px;}
 .habit-card{
@@ -424,6 +417,17 @@ body.reduce-motion *{animation-duration:.01ms !important; transition-duration:.0
 .tx-day-header:first-child{margin-top:0;}
 .time-of-day-row{display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:7px 0; border-bottom:1px solid var(--border);}
 .time-of-day-row:last-child{border-bottom:none;}
+
+/* achievements */
+.ach-card{display:flex; gap:14px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:14px; transition: all .2s var(--ease);}
+.ach-card.locked{opacity:.42;}
+.ach-card.unlocked{border-color:rgba(249,199,79,.5); background:rgba(249,199,79,.06);}
+.ach-icon{font-size:26px; width:50px; height:50px; display:flex; align-items:center; justify-content:center; background:var(--surface2); border-radius:50%; flex:none;}
+.ach-card.unlocked .ach-icon{background:rgba(249,199,79,.18);}
+.ach-info{flex:1; min-width:0;}
+.ach-title{font-weight:700; font-size:14px;}
+.ach-desc{font-size:11.5px; color:var(--muted); margin-top:2px;}
+.ach-date{font-size:10px; color:var(--gold); margin-top:5px; font-family:'JetBrains Mono'; text-transform:uppercase; letter-spacing:.3px;}
 
 /* custom section backgrounds */
 .bg-row{display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border);}

@@ -125,6 +125,7 @@ const DEFAULT_STATE = () => ({
   goals: [],
   learn: [],
   journalEntries: {},  // "YYYY-MM-DD" -> {text, updatedAt}
+  unlockedAchievements: {}, // id -> unlockedAt timestamp
   settings: {
     notifOn:false, reminderTime:"20:00", taskNotifOn:true,
     stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
@@ -392,7 +393,7 @@ document.querySelectorAll(".sheet-item").forEach(btn=>{
 });
 
 /* ---------- Navigation with slide transition ---------- */
-const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","journal","settings"];
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","journal","achievements","settings"];
 function showView(name){
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
   const target = document.getElementById("view-"+name);
@@ -426,6 +427,7 @@ function runViewRenderer(name){
   if(name==="learn") renderLearn();
   if(name==="calendar") renderCalendar();
   if(name==="journal") renderJournal();
+  if(name==="achievements") renderAchievements();
   if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
@@ -476,7 +478,6 @@ function renderHome(){
   stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
   document.getElementById("stepsStatNum").textContent = state.stepLogs[key] || 0;
 
-  renderPerfectDayCard();
   renderTrendChart();
   maybePromptWeight();
 }
@@ -567,22 +568,6 @@ function renderDailyHabitList(containerEl, dateKey){
   }
 }
 
-function renderPerfectDayCard(){
-  const key = todayKey();
-  const perfect = isPerfectDay(key);
-  const streak = computePerfectStreak();
-  const card = document.getElementById("perfectDayCard");
-  card.innerHTML = `
-    <div class="perfect-day-left">
-      <div class="perfect-day-star">${perfect ? "🌟" : "⭐"}</div>
-      <div>
-        <div class="perfect-day-title">${perfect ? "Perfect Day!" : "Perfect Day — not yet"}</div>
-        <div class="perfect-day-sub">All habits + workout${state.settings.stepsOn?" + steps":""}</div>
-      </div>
-    </div>
-    <div class="perfect-day-streak">${streak}</div>`;
-}
-
 function computeStreak(){
   let streak=0;
   let d = new Date();
@@ -594,41 +579,6 @@ function computeStreak(){
     else break;
   }
   return streak;
-}
-
-/* ---- Perfect Day: all daily habits + workout done + steps logged (if enabled) ---- */
-function isPerfectDay(dateKey){
-  const dailyLog = state.dailyLogs[dateKey] || [];
-  const totalHabits = state.habits.daily.length;
-  const allHabitsDone = totalHabits>0 && state.habits.daily.every((h,i)=> entryCountsAsDone(dailyLog[i], h));
-  const wStatus = workoutDayStatus(dateKey);
-  const workoutDone = wStatus==="done" || wStatus==="makeup";
-  let stepsOk = true;
-  if(state.settings.stepsOn){
-    stepsOk = !!(state.stepLogs[dateKey] && state.stepLogs[dateKey] > 0);
-  }
-  return allHabitsDone && workoutDone && stepsOk;
-}
-function computePerfectStreak(){
-  let streak=0;
-  let d = new Date();
-  while(true){
-    const key = fmtDate(d);
-    if(isPerfectDay(key)){ streak++; d.setDate(d.getDate()-1); }
-    else if(key===todayKey()){ d.setDate(d.getDate()-1); } // today not yet perfect — don't break, just don't count
-    else break;
-  }
-  return streak;
-}
-function countPerfectDaysYTD(){
-  let count=0;
-  const todayStr = todayKey();
-  let d = new Date(YEAR_START);
-  while(fmtDate(d) <= todayStr){
-    if(isPerfectDay(fmtDate(d))) count++;
-    d.setDate(d.getDate()+1);
-  }
-  return count;
 }
 
 function renderTrendChart(){
@@ -1357,7 +1307,7 @@ function updateHomeStepsStat(){
 }
 
 /* ---------- ANALYTICS ---------- */
-let monthlyChartInstance=null, weeklyTrendChartInstance=null, weightChartInstance=null, stepsChartInstance=null, perfectDayChartInstance=null;
+let monthlyChartInstance=null, weeklyTrendChartInstance=null, weightChartInstance=null, stepsChartInstance=null;
 function renderAnalytics(){
   const dailyTotal = state.habits.daily.length;
   let ytdDone=0, ytdPossible=0, monthPcts=[];
@@ -1378,8 +1328,6 @@ function renderAnalytics(){
   let bestIdx = monthPcts.reduce((best,v,i,arr)=> v>arr[best]?i:best, 0);
   document.getElementById("anaBestMonth").textContent = monthPcts[bestIdx]>0 ? MONTHS[bestIdx].name.slice(0,3) : "—";
   document.getElementById("anaStreak").textContent = computeStreak();
-  document.getElementById("anaPerfectStreak").textContent = computePerfectStreak();
-  document.getElementById("anaPerfectYTD").textContent = countPerfectDaysYTD();
   let totalSavings=0;
   for(let i=0;i<12;i++){ totalSavings += monthSavings(i); }
   document.getElementById("anaSavings").textContent = "₹"+totalSavings.toLocaleString("en-IN");
@@ -1410,21 +1358,6 @@ function renderAnalytics(){
     data:{labels:wLabels, datasets:[{data:wData, borderColor:"#C9A6F7", backgroundColor:"rgba(201,166,247,.12)", tension:.4, fill:true, pointRadius:3, pointBackgroundColor:"#C9A6F7", borderWidth:2}]},
     options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
       scales:{y:{min:0,max:100,ticks:{color:"#8991B3",callback:v=>v+"%"},grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
-  });
-
-  const pdLabels=[], pdData=[];
-  for(let i=13;i>=0;i--){
-    const d=new Date(); d.setDate(d.getDate()-i);
-    pdLabels.push(d.toLocaleDateString(undefined,{day:"numeric",month:"short"}));
-    pdData.push(isPerfectDay(fmtDate(d)) ? 1 : 0);
-  }
-  const ctxPD = document.getElementById("perfectDayChart");
-  if(perfectDayChartInstance) perfectDayChartInstance.destroy();
-  perfectDayChartInstance = new Chart(ctxPD, {
-    type:"bar",
-    data:{labels:pdLabels, datasets:[{data:pdData, backgroundColor:"#F9C74F", borderRadius:6}]},
-    options:{responsive:true, animation:{duration:700,easing:"easeOutQuart"}, plugins:{legend:{display:false}},
-      scales:{y:{min:0,max:1,ticks:{color:"#8991B3",stepSize:1,callback:v=>v?"Perfect":"—"}, grid:{color:"#2D2D44"}}, x:{ticks:{color:"#8991B3"},grid:{display:false}}}}
   });
 
   const weightEntries = [...Object.values(state.weightLogs).filter(Boolean), ...state.bodyLogs.map(b=>({date:b.date, weight:b.weight}))]
@@ -2227,6 +2160,62 @@ function renderJournalEntriesList(){
 }
 
 
+/* ---------- ACHIEVEMENTS ---------- */
+const ACHIEVEMENTS = [
+  {id:"streak_7", title:"Week Warrior", desc:"Reach a 7-day habit streak", icon:"🔥", check: ()=> computeStreak()>=7},
+  {id:"streak_30", title:"Month Master", desc:"Reach a 30-day habit streak", icon:"🏆", check: ()=> computeStreak()>=30},
+  {id:"streak_100", title:"Centurion", desc:"Reach a 100-day habit streak", icon:"💯", check: ()=> computeStreak()>=100},
+  {id:"first_workout", title:"First Rep", desc:"Complete your first workout day", icon:"💪", check: ()=> Object.keys(state.workoutLogs).some(k=>{ const s=workoutDayStatus(k); return s==="done"||s==="makeup"; })},
+  {id:"fitness_streak_7", title:"On a Roll", desc:"Reach a 7-day fitness streak", icon:"⚡", check: ()=> computeFitnessStreak()>=7},
+  {id:"first_routine", title:"Routine Builder", desc:"Create your first custom routine", icon:"📋", check: ()=> state.routines.length>=1},
+  {id:"first_custom_exercise", title:"Exercise Inventor", desc:"Create a custom exercise", icon:"🛠️", check: ()=> state.customExercises.length>=1},
+  {id:"first_routine_session", title:"Session Complete", desc:"Finish a full routine session", icon:"✅", check: ()=> state.routineWorkoutLogs.some(s=>s.completedAt)},
+  {id:"first_tx", title:"Money Tracker", desc:"Log your first transaction", icon:"💰", check: ()=> state.transactions.length>=1},
+  {id:"positive_month", title:"In the Green", desc:"End a month with positive savings", icon:"📈", check: ()=> MONTHS.some((m,i)=> monthSavings(i)>0)},
+  {id:"first_goal_done", title:"Goal Getter", desc:"Fully fund a savings goal", icon:"🎯", check: ()=> state.goals.some(g=> g.cost>0 && (g.saved||0)>=g.cost)},
+  {id:"first_journal", title:"Dear Diary", desc:"Write your first journal entry", icon:"📔", check: ()=> Object.keys(state.journalEntries).length>=1},
+  {id:"journal_7", title:"Consistent Chronicler", desc:"Write 7 journal entries", icon:"📚", check: ()=> Object.keys(state.journalEntries).length>=7},
+  {id:"first_task_done", title:"Task Slayer", desc:"Complete your first calendar task", icon:"✔️", check: ()=> state.tasks.some(t=>t.done)},
+  {id:"first_learn_done", title:"Lifelong Learner", desc:"Finish something on your Learn list", icon:"🎓", check: ()=> state.learn.some(l=>l.status==="Done")},
+  {id:"first_weight", title:"Checked In", desc:"Log your weight for the first time", icon:"⚖️", check: ()=> Object.keys(state.weightLogs).length>0 || state.bodyLogs.length>0},
+];
+function checkAchievements(){
+  let unlockedNew = [];
+  ACHIEVEMENTS.forEach(a=>{
+    if(state.unlockedAchievements[a.id]) return;
+    try{
+      if(a.check()){
+        state.unlockedAchievements[a.id] = Date.now();
+        unlockedNew.push(a);
+      }
+    }catch(e){ /* ignore a faulty check rather than break the app */ }
+  });
+  if(unlockedNew.length>0){
+    saveState();
+    unlockedNew.forEach(a=> toast(`🏆 Achievement unlocked: ${a.title}`));
+  }
+}
+function renderAchievements(){
+  checkAchievements();
+  const wrap = document.getElementById("achievementsList");
+  wrap.innerHTML = "";
+  const unlockedCount = ACHIEVEMENTS.filter(a=>state.unlockedAchievements[a.id]).length;
+  document.getElementById("achUnlockedCount").textContent = `${unlockedCount}/${ACHIEVEMENTS.length}`;
+  ACHIEVEMENTS.forEach(a=>{
+    const unlockedAt = state.unlockedAchievements[a.id];
+    const card = document.createElement("div");
+    card.className = "ach-card " + (unlockedAt ? "unlocked" : "locked");
+    card.innerHTML = `
+      <div class="ach-icon">${unlockedAt ? a.icon : "🔒"}</div>
+      <div class="ach-info">
+        <div class="ach-title">${escapeHtml(a.title)}</div>
+        <div class="ach-desc">${escapeHtml(a.desc)}</div>
+        ${unlockedAt ? `<div class="ach-date">Unlocked ${new Date(unlockedAt).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}</div>` : ""}
+      </div>`;
+    wrap.appendChild(card);
+  });
+}
+
 /* ---------- CUSTOM SECTION BACKGROUNDS ---------- */
 const BG_SECTIONS = [
   {id:"home", label:"Home"},
@@ -2238,6 +2227,7 @@ const BG_SECTIONS = [
   {id:"learn", label:"Learn"},
   {id:"calendar", label:"Calendar"},
   {id:"journal", label:"Journal"},
+  {id:"achievements", label:"Achievements"},
 ];
 const BG_MAX_DIM = 1000;
 const BG_JPEG_QUALITY = 0.72;
@@ -2522,7 +2512,7 @@ function checkReminderLoop(){
     }
   }
 }
-setInterval(()=>{ checkReminderLoop(); checkTaskReminders(); }, 60000);
+setInterval(()=>{ checkReminderLoop(); checkTaskReminders(); checkAchievements(); }, 60000);
 
 document.getElementById("exportBtn").addEventListener("click", ()=>{
   const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
@@ -2621,3 +2611,4 @@ renderHome();
 checkTaskReminders();
 topUpRecurringTasks();
 applySectionBackgrounds();
+checkAchievements();
