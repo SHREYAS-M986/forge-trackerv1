@@ -397,6 +397,18 @@ body.reduce-motion *{animation-duration:.01ms !important; transition-duration:.0
 }
 .routine-draft-actions button:disabled{opacity:.3; cursor:default;}
 
+/* 3D body model */
+.body-model-card{
+  width:100%; max-width:340px; aspect-ratio:1/1; margin:0 auto 12px;
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  overflow:hidden; position:relative; touch-action:none;
+}
+.body-model-card canvas{width:100%; height:100%; display:block;}
+.body-model-fallback{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  padding:20px; text-align:center; color:var(--muted); font-size:12px;
+}
+
 /* money dashboard */
 .money-dash-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px;}
 .money-dash-stat{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 8px; text-align:center;}

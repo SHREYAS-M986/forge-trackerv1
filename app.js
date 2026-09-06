@@ -49,46 +49,6 @@ const QUOTES = [
 "A year from now, you'll wish you started today."
 ];
 
-/* ---------- Exercise library (original motion cues, no copyrighted media) ---------- */
-const CALISTHENICS = [
-  {name:"Push-Up", type:"push", area:"Chest / Triceps / Shoulders", sets:"3 x 12–15", cue:"Keep body in a straight line, elbows around 45° from torso."},
-  {name:"Pull-Up", type:"pull", area:"Back / Biceps", sets:"3 x 6–10", cue:"Full hang to chin over bar, control the descent."},
-  {name:"Dip", type:"push", area:"Triceps / Chest", sets:"3 x 8–12", cue:"Lean slightly forward, elbows tucked close to body."},
-  {name:"Bodyweight Squat", type:"squat", area:"Quads / Glutes", sets:"3 x 15–20", cue:"Knees track over toes, chest stays up."},
-  {name:"Pistol Squat (progression)", type:"squat", area:"Quads / Glutes / Balance", sets:"3 x 5 each leg", cue:"Use a support at first, control the descent."},
-  {name:"Walking Lunge", type:"squat", area:"Quads / Glutes", sets:"3 x 12 each leg", cue:"Front knee stays stacked over the ankle."},
-  {name:"Plank", type:"core", area:"Core / Shoulders", sets:"3 x 45–60s hold", cue:"Squeeze glutes, don't let hips sag or pike."},
-  {name:"Hollow Body Hold", type:"core", area:"Core", sets:"3 x 20–30s hold", cue:"Lower back pressed to floor, arms and legs extended."},
-  {name:"L-Sit", type:"core", area:"Core / Hip flexors", sets:"3 x 10–20s hold", cue:"Push shoulders down away from ears, legs straight."},
-  {name:"Mountain Climbers", type:"core", area:"Core / Cardio", sets:"3 x 30s", cue:"Drive knees fast, keep hips low and level."},
-  {name:"Superman", type:"hinge", area:"Lower back / Glutes", sets:"3 x 15", cue:"Lift chest and legs together, squeeze at the top."},
-  {name:"Glute Bridge", type:"hinge", area:"Glutes / Hamstrings", sets:"3 x 15", cue:"Squeeze glutes hard at the top, avoid arching the lower back."},
-  {name:"Inverted Row", type:"pull", area:"Back / Biceps", sets:"3 x 10–12", cue:"Pull chest to the bar, squeeze shoulder blades together."},
-  {name:"Pike Push-Up", type:"push", area:"Shoulders", sets:"3 x 8–10", cue:"Hips high, aim the crown of your head toward the floor."},
-  {name:"Burpee", type:"push", area:"Full body / Cardio", sets:"3 x 10", cue:"Chest to floor, explosive jump at the top."},
-];
-const LOOKSMAXING = [
-  {name:"Chin Tucks", type:"core", area:"Jawline / Neck posture", sets:"3 x 15", cue:"Pull chin straight back like making a double chin, don't tilt down."},
-  {name:"Neck Curl", type:"hinge", area:"Neck / Jawline", sets:"3 x 12", cue:"Slow controlled curl, add light hand resistance if easy."},
-  {name:"Isometric Jaw Hold", type:"core", area:"Jaw / Masseter", sets:"3 x 10s holds", cue:"Light to moderate pressure only — don't overdo it."},
-  {name:"Posture Tongue Position", type:"stretch", area:"Tongue posture / Jawline", sets:"Hold through the day", cue:"Tongue flat on the roof of the mouth, lips sealed, teeth lightly touching. Evidence for changing bone structure is limited — this mainly builds posture awareness."},
-  {name:"Wall Posture Stand", type:"stretch", area:"Posture / Spine", sets:"2 x 60s", cue:"Head, shoulder blades and glutes all touching the wall."},
-  {name:"Cheek Lift (face yoga)", type:"core", area:"Cheeks", sets:"3 x 10", cue:"Smile wide, hold two seconds, release slowly."},
-  {name:"Shoulder External Rotation", type:"pull", area:"Shoulders / Posture", sets:"3 x 15", cue:"Elbows pinned at sides, rotate forearms outward."},
-  {name:"Wide-Grip Pull-Up", type:"pull", area:"Back width / V-taper", sets:"3 x 6–10", cue:"Wide grip, drive elbows down to bring chest to the bar."},
-  {name:"Lateral Raise", type:"pull", area:"Shoulders / V-taper", sets:"3 x 15", cue:"Raise to shoulder height only, control the negative."},
-  {name:"Face Pull (band)", type:"pull", area:"Rear delts / Posture", sets:"3 x 15", cue:"Pull toward your face, elbows finish high and wide."},
-  {name:"Standing Cat-Cow", type:"stretch", area:"Spine mobility / Posture", sets:"2 x 10", cue:"Slow controlled wave through the whole spine."},
-  {name:"Even-Sided Chewing", type:"core", area:"Jaw / Masseter", sets:"3 x 30 chews", cue:"Sugar-free gum, alternate sides evenly to keep jaw symmetric."},
-];
-
-function motionIcon(type){
-  const bar = `<svg width="30" height="30" viewBox="0 0 30 30"><rect class="mo-bar" x="6" y="13" width="18" height="4" rx="2" fill="var(--gold)"/></svg>`;
-  const dot = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="mo-dot" cx="15" cy="15" r="6"/></svg>`;
-  if(type==="squat"||type==="hinge") return `<div class="motion-${type}">${bar}</div>`;
-  return `<div class="motion-${type}">${dot}</div>`;
-}
-
 /* ---------- State ---------- */
 const DEFAULT_STATE = () => ({
   habits: {
@@ -111,12 +71,10 @@ const DEFAULT_STATE = () => ({
   monthlyLogs: {},
   weightLogs: {},     // weekIndex -> {date, weight}
   stepLogs: {},        // "YYYY-MM-DD" -> steps
-  workoutLogs: {},     // "YYYY-MM-DD" -> { "<exerciseIndex>": [bool,...] }
-  workoutStatus: {},   // "YYYY-MM-DD" -> {type:"skipped"} | {type:"makeup", loggedOn:"YYYY-MM-DD"}
-  bodyLogs: [],         // [{id, date, weight, waist}]
-  customExercises: [],  // [{id,name,category,muscleGroup,difficulty,equipment,description,cues,sets,reps,duration,rest,videoUrl,icon}]
-  routines: [],          // [{id,name,exercises:[{name,sets,reps,duration,rest,sourceType,sourceId}]}]
-  routineWorkoutLogs: [], // [{id,date,routineId,routineName,exercises:[{name,targetSets,targetReps,targetDuration,loggedSets:[bool]}],completedAt}]
+  bodyLogs: [],         // [{id, date, weight, waist, bodyFatPct}]
+  profile: { heightCm: null },
+  exerciseNames: [],     // ["Push-ups","Squats",...] — user's own exercise list
+  exerciseLogs: {},       // "YYYY-MM-DD" -> [{id, exerciseName, sets, reps}]
   tasks: [],           // {id, title, dueDate, notes, done, lastNotifiedDate, recurrence?, seriesId?}
   money: { initialBalance: 0 },
   transactions: [],      // [{id,type:"income"|"expense",amount,category,date,note}]
@@ -151,7 +109,7 @@ function loadState(){
 }
 function mergeWithDefaults(parsed){
   const d = DEFAULT_STATE();
-  return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}};
+  return {...d, ...parsed, habits:{...d.habits,...(parsed.habits||{})}, settings:{...d.settings,...(parsed.settings||{})}, money:{...d.money,...(parsed.money||{})}, profile:{...d.profile,...(parsed.profile||{})}};
 }
 /* Upgrade old string-array habits to objects, and old monthly money entries to dated transactions. Runs once. */
 function migrateState(s){
@@ -212,84 +170,6 @@ function monthNumFromName(name){
   return ["January","February","March","April","May","June","July","August","September","October","November","December"].indexOf(name);
 }
 function weekIndexOf(d){ return Math.min(Math.max(Math.floor(dayIndexInYear(d)/7),0), 51); }
-
-/* ---- Workout program week/day helpers ---- */
-function mondayOnOrBefore(d){
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const diff = (day===0) ? 6 : day-1;
-  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate()-diff);
-  return m;
-}
-const PROGRAM_START_MONDAY = mondayOnOrBefore(YEAR_START);
-function programWeekIndex(d){
-  const diffDays = Math.floor((d - PROGRAM_START_MONDAY) / 86400000);
-  const w = Math.floor(diffDays/7) + 1;
-  return Math.min(Math.max(w,1), 52);
-}
-function programDayName(d){
-  return WORKOUT_DAYS_ORDER[(d.getDay()+6)%7]; // convert JS Sun=0..Sat=6 to Mon-first index
-}
-function todaysWorkout(){ return getWorkoutForDate(new Date()); }
-function getWorkoutForDate(d){
-  const w = programWeekIndex(d);
-  const dayIdx = (d.getDay()+6)%7;
-  return WORKOUT_PLAN[w-1][dayIdx];
-}
-
-/* ---- Workout day status: done / partial / missed / skipped / makeup / future / today-pending ---- */
-function workoutSetsProgress(dateKey){
-  const day = getWorkoutForDate(new Date(dateKey));
-  const log = state.workoutLogs[dateKey] || {};
-  let total=0, done=0;
-  day.exercises.forEach((ex, exIdx)=>{
-    const setsTarget = (typeof ex.sets === "number") ? ex.sets : 1;
-    const exLog = log[exIdx] || [];
-    total += setsTarget;
-    done += exLog.filter(Boolean).length;
-  });
-  return {total, done, day};
-}
-function workoutDayStatus(dateKey){
-  const rec = state.workoutStatus[dateKey];
-  const today = todayKey();
-  const {total, done} = workoutSetsProgress(dateKey);
-  if(rec && rec.type==="skipped") return "skipped";
-  if(rec && rec.type==="makeup"){
-    if(total>0 && done>=total) return "makeup";
-    if(done>0) return "makeup-partial";
-    return dateKey<today ? "missed" : "future";
-  }
-  if(total>0 && done>=total) return "done";
-  if(done>0) return dateKey===today ? "today-pending" : (dateKey<today ? "partial" : "future");
-  if(dateKey===today) return "today-pending";
-  if(dateKey<today) return "missed";
-  return "future";
-}
-function workoutStatusMeta(status){
-  const map = {
-    done:        {label:"Done",       cls:"pill-excellent"},
-    makeup:      {label:"Made up",    cls:"pill-good"},
-    "makeup-partial": {label:"Make-up in progress", cls:"pill-fair"},
-    partial:     {label:"Partial",    cls:"pill-fair"},
-    skipped:     {label:"Skipped",    cls:"pill-neutral"},
-    missed:      {label:"Missed",     cls:"pill-poor"},
-    "today-pending": {label:"Today",  cls:"pill-neutral"},
-    future:      {label:"Upcoming",   cls:"pill-neutral"},
-  };
-  return map[status] || {label:status, cls:"pill-neutral"};
-}
-function computeFitnessStreak(){
-  let streak=0;
-  let d = new Date();
-  while(true){
-    const key = fmtDate(d);
-    const status = workoutDayStatus(key);
-    if(status==="done" || status==="makeup"){ streak++; d.setDate(d.getDate()-1); }
-    else if(status==="skipped" || status==="today-pending"){ d.setDate(d.getDate()-1); }
-    else break;
-  }
-  return streak;
-}
 
 function quoteForToday(){
   const idx = ((dayIndexInYear(new Date()) % QUOTES.length) + QUOTES.length) % QUOTES.length;
@@ -751,199 +631,208 @@ function renderMonthly(){
   });
 }
 
-/* ---------- FITNESS ---------- */
-let fitnessSeg = "today";
-let librarySeg = "calisthenics";
-let fitnessViewDate = todayKey();
+/* ---------- FITNESS (simple exercise log) ---------- */
+let fitnessSeg = "log";
+let exerciseSelectedDate = todayKey();
 
 document.querySelectorAll("#fitnessSeg .seg-btn").forEach(b=>{
   b.addEventListener("click", ()=>{
     document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");
     fitnessSeg = b.dataset.fseg;
-    ["today","history","body","routines","library"].forEach(s=>{
+    ["log","exercises","records","body"].forEach(s=>{
       document.getElementById("fseg-"+s).classList.toggle("hidden", s!==fitnessSeg);
     });
     renderFitness();
   });
 });
-document.querySelectorAll("#librarySeg .seg-btn").forEach(b=>{
-  b.addEventListener("click", ()=>{
-    document.querySelectorAll("#librarySeg .seg-btn").forEach(x=>x.classList.remove("active"));
-    b.classList.add("active");
-    librarySeg = b.dataset.lseg;
-    document.getElementById("lseg-builtin").classList.toggle("hidden", librarySeg==="myexercises");
-    document.getElementById("lseg-myexercises").classList.toggle("hidden", librarySeg!=="myexercises");
-    renderLibrary();
-  });
-});
 
 function renderFitness(){
-  if(fitnessSeg==="today") renderTodayWorkout();
-  else if(fitnessSeg==="history") renderWorkoutHistory();
-  else if(fitnessSeg==="body") renderBodyLog();
-  else if(fitnessSeg==="routines") renderRoutines();
-  else renderLibrary();
+  if(fitnessSeg==="log") renderFitnessLog();
+  else if(fitnessSeg==="exercises") renderExercisesManage();
+  else if(fitnessSeg==="records") renderRecords();
+  else renderBody();
 }
 
-function renderTodayWorkout(){
-  const key = fitnessViewDate;
-  const dateObj = new Date(key);
-  const w = programWeekIndex(dateObj);
-  const day = getWorkoutForDate(dateObj);
-  document.getElementById("workoutFocus").textContent = day.focus;
-  document.getElementById("workoutMeta").textContent = `Week ${w} of 52 · ${day.phase} · 🔥 ${computeFitnessStreak()} day streak`;
-
-  const isToday = key === todayKey();
-  const banner = document.getElementById("viewingDateBanner");
-  banner.classList.toggle("hidden", isToday);
-  if(!isToday){
-    document.getElementById("viewingDateLabel").textContent =
-      "Viewing " + new Date(key).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"});
+/* ---- Log ---- */
+function populateExerciseSelect(){
+  const sel = document.getElementById("logExerciseSelect");
+  if(state.exerciseNames.length===0){
+    sel.innerHTML = `<option value="">Add an exercise first</option>`;
+    return;
   }
+  sel.innerHTML = state.exerciseNames.map(n=>`<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join("");
+}
+function renderFitnessLog(){
+  const isToday = exerciseSelectedDate === todayKey();
+  document.getElementById("exerciseDateLabel").textContent = isToday
+    ? "Today"
+    : new Date(exerciseSelectedDate).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"});
+  document.getElementById("nextExerciseDay").disabled = isToday;
 
   const stepsWrap = document.getElementById("stepsCardWrap");
-  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn || !isToday);
-  if(state.settings.stepsOn && isToday){
-    document.getElementById("stepsInput").value = state.stepLogs[todayKey()] || "";
+  stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
+  if(state.settings.stepsOn){
+    document.getElementById("stepsInput").value = isToday ? (state.stepLogs[todayKey()] || "") : "";
+    document.getElementById("stepsInput").disabled = !isToday;
   }
 
-  const status = workoutDayStatus(key);
-  const isPastIncomplete = key < todayKey() && (status==="missed" || status==="partial");
-  document.getElementById("makeupHint").textContent = isPastIncomplete
-    ? "This day is incomplete. Ticking sets below logs it as a make-up session."
-    : "";
+  populateExerciseSelect();
 
-  const log = state.workoutLogs[key] || {};
-  const list = document.getElementById("todayExerciseList");
-  list.innerHTML = "";
-
-  let totalSets=0, doneSets=0;
-
-  day.exercises.forEach((ex, exIdx)=>{
-    const setsTarget = (typeof ex.sets === "number") ? ex.sets : 1;
-    const exLog = log[exIdx] || Array(setsTarget).fill(false);
-    const doneCount = exLog.filter(Boolean).length;
-    totalSets += setsTarget; doneSets += doneCount;
-    const allDone = doneCount >= setsTarget;
-
-    const card = document.createElement("div");
-    card.className = "workout-exercise-card" + (allDone ? " complete" : "");
-    const pipsHtml = Array.from({length:setsTarget}).map((_,si)=>{
-      const on = !!exLog[si];
-      const label = (typeof ex.sets === "number") ? (si+1) : "✓";
-      return `<div class="set-pip ${on?"done":""}" data-ex="${exIdx}" data-set="${si}">${label}</div>`;
-    }).join("");
-    card.innerHTML = `
-      <div class="workout-ex-top">
-        <div>
-          <div class="workout-ex-name">${escapeHtml(ex.name)}</div>
-          <div class="workout-ex-target">${typeof ex.sets==="number" ? ex.sets+" sets" : ""} ${ex.sets!=="-"?"×":""} ${escapeHtml(String(ex.reps))}</div>
-        </div>
-      </div>
-      <div class="set-pips">${pipsHtml}</div>`;
-    card.querySelectorAll(".set-pip").forEach(pip=>{
-      pip.addEventListener("click", ()=>{
-        const exI = +pip.dataset.ex, setI = +pip.dataset.set;
-        if(!state.workoutLogs[key]) state.workoutLogs[key] = {};
-        if(!state.workoutLogs[key][exI]) state.workoutLogs[key][exI] = Array(setsTarget).fill(false);
-        const turningOn = !state.workoutLogs[key][exI][setI];
-        state.workoutLogs[key][exI][setI] = turningOn;
-        // auto-flag as make-up: ticking a set on a past date that wasn't already skipped
-        if(turningOn && key < todayKey()){
-          const rec = state.workoutStatus[key];
-          if(!rec || rec.type!=="skipped"){
-            state.workoutStatus[key] = {type:"makeup", loggedOn: todayKey()};
-          }
-        }
-        saveState();
-        renderTodayWorkout();
-        if(turningOn && !state.settings.reduceMotion){
-          requestAnimationFrame(()=>{
-            const freshPip = list.querySelector(`.set-pip[data-ex="${exI}"][data-set="${setI}"]`);
-            if(freshPip){ freshPip.classList.add("pop"); setTimeout(()=>freshPip.classList.remove("pop"), 420); }
-          });
-        }
-      });
-    });
-    list.appendChild(card);
-  });
-
-  const pct = totalSets ? doneSets/totalSets : 0;
-  const freshStatus = workoutDayStatus(key);
-  if(freshStatus==="skipped"){
-    document.getElementById("workoutRating").innerHTML =
-      `<span>This session was skipped</span><span class="rating-pill pill-neutral">Skipped</span>`;
-  } else {
-    const r = ratingLabel(pct);
-    document.getElementById("workoutRating").innerHTML =
-      `<span>Progress: <b class="mono">${doneSets}/${totalSets} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
-  }
-  const sm = workoutStatusMeta(freshStatus);
-  document.getElementById("workoutStatusRow").innerHTML = `<span class="rating-pill ${sm.cls}">${sm.label}</span>`;
-
-  const skipBtn = document.getElementById("skipSessionBtn");
-  skipBtn.textContent = freshStatus==="skipped" ? "Unskip this session" : "Skip this session (rest / injury)";
-}
-
-document.getElementById("backToTodayBtn").addEventListener("click", ()=>{
-  fitnessViewDate = todayKey();
-  renderTodayWorkout();
-});
-document.getElementById("skipSessionBtn").addEventListener("click", ()=>{
-  const key = fitnessViewDate;
-  const current = state.workoutStatus[key];
-  if(current && current.type==="skipped"){
-    delete state.workoutStatus[key];
-    toast("Session unskipped");
-  } else {
-    state.workoutStatus[key] = {type:"skipped"};
-    toast("Marked as skipped — won't count against your streak or rating");
-  }
-  saveState();
-  renderTodayWorkout();
-});
-
-function renderWorkoutHistory(){
-  const wrap = document.getElementById("workoutHistoryList");
+  const wrap = document.getElementById("exerciseLogList");
   wrap.innerHTML = "";
-  const todayStr = todayKey();
-  for(let i=0; i<21; i++){
-    const d = new Date(); d.setDate(d.getDate()-i);
-    const key = fmtDate(d);
-    const day = getWorkoutForDate(d);
-    const status = workoutDayStatus(key);
-    const meta = workoutStatusMeta(status);
-    const row = document.createElement("div");
-    row.className = "history-row";
-    row.innerHTML = `
+  const entries = state.exerciseLogs[exerciseSelectedDate] || [];
+  if(entries.length===0){
+    wrap.innerHTML = `<p class="hint">Nothing logged ${isToday?"today":"this day"} yet.</p>`;
+  }
+  entries.forEach(e=>{
+    const card = document.createElement("div");
+    card.className = "task-card";
+    card.innerHTML = `
       <div>
-        <div class="history-date">${key===todayStr?"Today":d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}</div>
-        <div class="history-focus">${escapeHtml(day.focus)}</div>
+        <div class="task-title">${escapeHtml(e.exerciseName)}</div>
+        <div class="task-meta">${e.sets} sets × ${e.reps} reps</div>
       </div>
-      <span class="rating-pill ${meta.cls}">${meta.label}</span>`;
-    row.addEventListener("click", ()=>{
-      fitnessViewDate = key;
-      document.querySelectorAll("#fitnessSeg .seg-btn").forEach(x=>x.classList.toggle("active", x.dataset.fseg==="today"));
-      fitnessSeg = "today";
-      ["today","history","body","library"].forEach(s=>document.getElementById("fseg-"+s).classList.toggle("hidden", s!=="today"));
-      renderTodayWorkout();
+      <div class="task-actions"><button class="task-icon-btn" data-act="del">✕</button></div>`;
+    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
+      state.exerciseLogs[exerciseSelectedDate] = state.exerciseLogs[exerciseSelectedDate].filter(x=>x.id!==e.id);
+      saveState();
+      renderFitnessLog();
+    });
+    wrap.appendChild(card);
+  });
+}
+document.getElementById("prevExerciseDay").addEventListener("click", ()=>{
+  const d = new Date(exerciseSelectedDate); d.setDate(d.getDate()-1);
+  exerciseSelectedDate = fmtDate(d);
+  renderFitnessLog();
+});
+document.getElementById("nextExerciseDay").addEventListener("click", ()=>{
+  if(exerciseSelectedDate===todayKey()) return;
+  const d = new Date(exerciseSelectedDate); d.setDate(d.getDate()+1);
+  exerciseSelectedDate = fmtDate(d);
+  renderFitnessLog();
+});
+document.getElementById("addExerciseLogBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("logExerciseSelect").value;
+  const sets = +document.getElementById("logSetsInput").value;
+  const reps = +document.getElementById("logRepsInput").value;
+  if(!name){ toast("Add an exercise first"); return; }
+  if(!sets || !reps){ toast("Enter sets and reps"); return; }
+  if(!state.exerciseLogs[exerciseSelectedDate]) state.exerciseLogs[exerciseSelectedDate] = [];
+  state.exerciseLogs[exerciseSelectedDate].push({id:Date.now()+"", exerciseName:name, sets, reps});
+  saveState();
+  document.getElementById("logSetsInput").value = "";
+  document.getElementById("logRepsInput").value = "";
+  toast("Logged");
+  renderFitnessLog();
+});
+
+/* ---- Manage exercise list ---- */
+function renderExercisesManage(){
+  const wrap = document.getElementById("exerciseNameList");
+  wrap.innerHTML = "";
+  if(state.exerciseNames.length===0){
+    wrap.innerHTML = `<p class="hint">No exercises yet — add your first one above.</p>`;
+    return;
+  }
+  state.exerciseNames.forEach((name,idx)=>{
+    const row = document.createElement("div");
+    row.className = "manage-row";
+    row.innerHTML = `<input type="text" value="${escapeAttr(name)}" /><button aria-label="Remove">✕</button>`;
+    row.querySelector("input").addEventListener("change", (e)=>{
+      const newName = e.target.value.trim();
+      if(!newName){ e.target.value = name; return; }
+      const oldName = name;
+      state.exerciseNames[idx] = newName;
+      Object.keys(state.exerciseLogs).forEach(k=>{
+        state.exerciseLogs[k].forEach(entry=>{ if(entry.exerciseName===oldName) entry.exerciseName = newName; });
+      });
+      saveState();
+      renderExercisesManage();
+    });
+    row.querySelector("button").addEventListener("click", ()=>{
+      if(!confirm(`Remove "${name}"? Historical logs keep the name but it won't be selectable to log anymore.`)) return;
+      state.exerciseNames.splice(idx,1);
+      saveState();
+      renderExercisesManage();
     });
     wrap.appendChild(row);
+  });
+}
+document.getElementById("addExerciseNameBtn").addEventListener("click", ()=>{
+  const input = document.getElementById("newExerciseNameInput");
+  const val = input.value.trim();
+  if(!val){ toast("Enter an exercise name"); return; }
+  if(state.exerciseNames.includes(val)){ toast("Already in your list"); return; }
+  state.exerciseNames.push(val);
+  saveState();
+  input.value = "";
+  renderExercisesManage();
+  toast("Exercise added");
+});
+
+/* ---- Records (all-time best sets / best reps per exercise) ---- */
+function bestForExercise(name){
+  let bestSets=0, bestSetsDate=null, bestReps=0, bestRepsDate=null;
+  Object.keys(state.exerciseLogs).forEach(date=>{
+    state.exerciseLogs[date].forEach(e=>{
+      if(e.exerciseName!==name) return;
+      if(e.sets>bestSets){ bestSets=e.sets; bestSetsDate=date; }
+      if(e.reps>bestReps){ bestReps=e.reps; bestRepsDate=date; }
+    });
+  });
+  return {bestSets, bestSetsDate, bestReps, bestRepsDate};
+}
+function renderRecords(){
+  const wrap = document.getElementById("recordsList");
+  wrap.innerHTML = "";
+  if(state.exerciseNames.length===0){
+    wrap.innerHTML = `<p class="hint">Add exercises and start logging to see your personal records here.</p>`;
+    return;
   }
+  state.exerciseNames.forEach(name=>{
+    const {bestSets, bestSetsDate, bestReps, bestRepsDate} = bestForExercise(name);
+    const card = document.createElement("div");
+    card.className = "goal-card";
+    card.innerHTML = `
+      <div class="goal-title">${escapeHtml(name)}</div>
+      <div class="goal-meta"><span>Best sets: ${bestSets||"—"}${bestSetsDate?" ("+new Date(bestSetsDate).toLocaleDateString(undefined,{day:"numeric",month:"short"})+")":""}</span></div>
+      <div class="goal-meta"><span>Best reps: ${bestReps||"—"}${bestRepsDate?" ("+new Date(bestRepsDate).toLocaleDateString(undefined,{day:"numeric",month:"short"})+")":""}</span></div>`;
+    wrap.appendChild(card);
+  });
+}
+function computeExerciseLogStreak(){
+  let streak=0;
+  let d = new Date();
+  while(true){
+    const key = fmtDate(d);
+    const log = state.exerciseLogs[key];
+    if(log && log.length>0){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
 }
 
-/* ---- Body log (dedicated Fitness weight/measurement entry) ---- */
+/* ---- Body: profile height, weight/waist/bodyfat log, body-fat calculator, 3D model ---- */
+document.getElementById("profileHeightInput").addEventListener("input", (e)=>{
+  state.profile.heightCm = e.target.value ? +e.target.value : null;
+  saveState();
+  updateBodyModelFromLatest();
+});
 document.getElementById("addBodyLogBtn").addEventListener("click", ()=>{
   const weight = +document.getElementById("bodyWeightInput").value;
   const waist = document.getElementById("bodyWaistInput").value ? +document.getElementById("bodyWaistInput").value : null;
+  const bodyFatPct = document.getElementById("bodyFatInput").value ? +document.getElementById("bodyFatInput").value : null;
   if(!weight || weight<=0){ toast("Enter a valid weight"); return; }
-  state.bodyLogs.push({ id: Date.now()+"", date: todayKey(), weight, waist });
+  state.bodyLogs.push({ id: Date.now()+"", date: todayKey(), weight, waist, bodyFatPct });
   saveState();
   document.getElementById("bodyWeightInput").value = "";
   document.getElementById("bodyWaistInput").value = "";
+  document.getElementById("bodyFatInput").value = "";
   toast("Logged");
   renderBodyLog();
+  updateBodyModelFromLatest();
 });
 function renderBodyLog(){
   const wrap = document.getElementById("bodyLogList");
@@ -951,359 +840,112 @@ function renderBodyLog(){
   const entries = [...state.bodyLogs].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,15);
   if(entries.length===0){ wrap.innerHTML = `<p class="hint">No entries yet.</p>`; return; }
   entries.forEach(e=>{
+    const parts = [`${e.weight} kg`];
+    if(e.waist) parts.push(`${e.waist} cm waist`);
+    if(e.bodyFatPct!=null) parts.push(`${e.bodyFatPct}% body fat`);
     const card = document.createElement("div");
     card.className = "task-card";
     card.innerHTML = `
       <div>
-        <div class="task-title">${e.weight} kg${e.waist ? ` · ${e.waist} cm waist` : ""}</div>
+        <div class="task-title">${escapeHtml(parts.join(" · "))}</div>
         <div class="task-meta">${new Date(e.date).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})}</div>
       </div>
       <div class="task-actions"><button class="task-icon-btn" data-act="del">✕</button></div>`;
     card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
       state.bodyLogs = state.bodyLogs.filter(x=>x.id!==e.id);
-      saveState(); renderBodyLog();
+      saveState();
+      renderBodyLog();
+      updateBodyModelFromLatest();
     });
     wrap.appendChild(card);
   });
 }
 
-function renderLibrary(){
-  if(librarySeg==="myexercises"){ renderMyExercises(); return; }
-  const list = document.getElementById("exerciseList");
-  const hint = document.getElementById("fitnessHint");
-  const data = librarySeg==="calisthenics" ? CALISTHENICS : LOOKSMAXING;
-  hint.textContent = librarySeg==="calisthenics"
-    ? "Bodyweight strength moves. Motion icons show the movement pattern — push, pull, squat, hinge, hold or stretch."
-    : "Posture, jaw and physique-aesthetic focused moves. Facial-exercise research is limited — treat these as posture/muscle-tone habits, not guaranteed structural change.";
-  list.innerHTML = "";
-  data.forEach(ex=>{
-    const card = document.createElement("div");
-    card.className = "exercise-card";
-    card.innerHTML = `
-      <div class="exercise-motion">${motionIcon(ex.type)}</div>
-      <div class="exercise-info">
-        <div class="exercise-name">${escapeHtml(ex.name)}</div>
-        <div class="exercise-meta">${escapeHtml(ex.area)} · ${escapeHtml(ex.sets)}</div>
-        <div class="exercise-cue">${escapeHtml(ex.cue)}</div>
-        <span class="exercise-link" data-name="${escapeHtml(ex.name)}">Watch form video ↗</span>
-      </div>`;
-    card.querySelector(".exercise-link").addEventListener("click", (e)=>{
-      const q = encodeURIComponent(e.target.dataset.name + " proper form");
-      window.open(`https://www.youtube.com/results?search_query=${q}`, "_blank");
-    });
-    list.appendChild(card);
+/* Body fat % — U.S. Navy tape-measure method (estimate only) */
+let bfSex = "male";
+let lastBfResult = null;
+document.querySelectorAll("#bfSexSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#bfSexSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    bfSex = b.dataset.sex;
+    document.getElementById("bfHipWrap").classList.toggle("hidden", bfSex!=="female");
   });
-}
-
-/* ---------- CUSTOM EXERCISE BUILDER ---------- */
-function guessMotionType(category){
-  const map = {Strength:"push", Calisthenics:"push", Mobility:"stretch", Cardio:"core", Core:"core", Stretching:"stretch"};
-  return map[category] || "core";
-}
-function renderMyExercises(){
-  const list = document.getElementById("myExercisesList");
-  list.innerHTML = "";
-  if(state.customExercises.length===0){
-    list.innerHTML = `<p class="hint">No custom exercises yet. Tap "+ Create exercise" to add one.</p>`;
+});
+document.getElementById("bfCalculateBtn").addEventListener("click", ()=>{
+  const height = +document.getElementById("bfHeightInput").value;
+  const neck = +document.getElementById("bfNeckInput").value;
+  const waist = +document.getElementById("bfWaistInput").value;
+  const hip = +document.getElementById("bfHipInput").value;
+  if(!height || !neck || !waist || (bfSex==="female" && !hip)){
+    toast("Fill in all the measurements");
     return;
   }
-  state.customExercises.forEach(ex=>{
-    const metaParts = [ex.muscleGroup, ex.sets?`${ex.sets} sets`:null, ex.reps||null].filter(Boolean).join(" · ");
-    const card = document.createElement("div");
-    card.className = "exercise-card";
-    card.innerHTML = `
-      <div class="exercise-motion">${motionIcon(guessMotionType(ex.category))}</div>
-      <div class="exercise-info">
-        <div class="exercise-name">${escapeHtml(ex.name)}</div>
-        <div class="exercise-meta">${escapeHtml(metaParts||ex.category||"")}</div>
-        ${ex.description?`<div class="exercise-cue">${escapeHtml(ex.description)}</div>`:""}
-        <div class="custom-ex-actions">
-          <button class="mini-btn" data-act="edit">Edit</button>
-          <button class="mini-btn" data-act="dup">Duplicate</button>
-          <button class="mini-btn delete" data-act="del">Delete</button>
-        </div>
-      </div>`;
-    card.querySelector('[data-act="edit"]').addEventListener("click", ()=> openExerciseSheet(ex));
-    card.querySelector('[data-act="dup"]').addEventListener("click", ()=>{
-      state.customExercises.push({...ex, id:Date.now()+"", name:ex.name+" (copy)"});
-      saveState(); renderMyExercises();
-      toast("Exercise duplicated");
-    });
-    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
-      if(!confirm("Delete this exercise? Past workout history using it keeps its name and logged data.")) return;
-      state.customExercises = state.customExercises.filter(x=>x.id!==ex.id);
-      saveState(); renderMyExercises();
-      toast("Exercise deleted");
-    });
-    list.appendChild(card);
-  });
-}
-let editingExerciseId = null;
-function openExerciseSheet(ex){
-  editingExerciseId = ex ? ex.id : null;
-  document.getElementById("exerciseFormTitle").textContent = ex ? "Edit exercise" : "Create exercise";
-  document.getElementById("exNameInput").value = ex ? ex.name : "";
-  document.getElementById("exCategoryInput").value = ex ? (ex.category||"Strength") : "Strength";
-  document.getElementById("exMuscleInput").value = ex ? (ex.muscleGroup||"Full Body") : "Full Body";
-  document.getElementById("exDifficultyInput").value = ex ? (ex.difficulty||"Beginner") : "Beginner";
-  document.getElementById("exEquipmentInput").value = ex ? (ex.equipment||"") : "";
-  document.getElementById("exSetsInput").value = ex && ex.sets!=null ? ex.sets : "";
-  document.getElementById("exRepsInput").value = ex ? (ex.reps||"") : "";
-  document.getElementById("exDurationInput").value = ex ? (ex.duration||"") : "";
-  document.getElementById("exRestInput").value = ex ? (ex.rest||"") : "";
-  document.getElementById("exDescriptionInput").value = ex ? (ex.description||"") : "";
-  document.getElementById("exCuesInput").value = ex ? (ex.cues||"") : "";
-  document.getElementById("exVideoInput").value = ex ? (ex.videoUrl||"") : "";
-  showSheet("exerciseBackdrop");
-}
-document.getElementById("createExerciseBtn").addEventListener("click", ()=> openExerciseSheet(null));
-document.getElementById("exerciseCancelBtn").addEventListener("click", ()=> hideSheet("exerciseBackdrop"));
-document.getElementById("exerciseSaveBtn").addEventListener("click", ()=>{
-  const name = document.getElementById("exNameInput").value.trim();
-  if(!name){ toast("Exercise name is required"); return; }
-  const data = {
-    name,
-    category: document.getElementById("exCategoryInput").value,
-    muscleGroup: document.getElementById("exMuscleInput").value,
-    difficulty: document.getElementById("exDifficultyInput").value,
-    equipment: document.getElementById("exEquipmentInput").value.trim(),
-    sets: document.getElementById("exSetsInput").value ? +document.getElementById("exSetsInput").value : null,
-    reps: document.getElementById("exRepsInput").value.trim(),
-    duration: document.getElementById("exDurationInput").value.trim(),
-    rest: document.getElementById("exRestInput").value.trim(),
-    description: document.getElementById("exDescriptionInput").value.trim(),
-    cues: document.getElementById("exCuesInput").value.trim(),
-    videoUrl: document.getElementById("exVideoInput").value.trim(),
-  };
-  if(editingExerciseId){
-    const idx = state.customExercises.findIndex(x=>x.id===editingExerciseId);
-    if(idx>-1) state.customExercises[idx] = {...state.customExercises[idx], ...data};
+  let bf;
+  if(bfSex==="male"){
+    bf = 495 / (1.0324 - 0.19077*Math.log10(waist-neck) + 0.15456*Math.log10(height)) - 450;
   } else {
-    state.customExercises.push({id:Date.now()+"", ...data});
+    bf = 495 / (1.29579 - 0.35004*Math.log10(waist+hip-neck) + 0.22100*Math.log10(height)) - 450;
   }
-  saveState();
-  hideSheet("exerciseBackdrop");
-  renderMyExercises();
-  toast("Exercise saved");
-});
-
-/* ---------- ROUTINE TEMPLATES ---------- */
-let editingRoutineId = null;
-let routineDraftExercises = [];
-let activeSessionId = null;
-
-function allExerciseOptions(){
-  const opts = [];
-  CALISTHENICS.forEach(e=> opts.push({name:e.name, sourceType:"builtin"}));
-  LOOKSMAXING.forEach(e=> opts.push({name:e.name, sourceType:"builtin"}));
-  state.customExercises.forEach(e=> opts.push({name:e.name, sourceType:"custom", sourceId:e.id}));
-  return opts;
-}
-function populateRoutinePicker(){
-  document.getElementById("routineExercisePicker").innerHTML =
-    allExerciseOptions().map((o,i)=>`<option value="${i}">${escapeHtml(o.name)}</option>`).join("");
-}
-function renderRoutineDraftList(){
-  const wrap = document.getElementById("routineExerciseList");
-  wrap.innerHTML = "";
-  if(routineDraftExercises.length===0){
-    wrap.innerHTML = `<p class="hint">No exercises added yet.</p>`;
+  if(!isFinite(bf) || isNaN(bf)){
+    toast("Check your measurements — couldn't calculate");
     return;
   }
-  routineDraftExercises.forEach((ex,i)=>{
-    const row = document.createElement("div");
-    row.className = "routine-draft-row";
-    row.innerHTML = `
-      <div class="routine-draft-info">
-        <b>${i+1}. ${escapeHtml(ex.name)}</b>
-        <span>${ex.sets?ex.sets+" sets · ":""}${escapeHtml(ex.reps||"")}${ex.rest?" · rest "+escapeHtml(ex.rest):""}</span>
-      </div>
-      <div class="routine-draft-actions">
-        <button data-act="up" ${i===0?"disabled":""}>↑</button>
-        <button data-act="down" ${i===routineDraftExercises.length-1?"disabled":""}>↓</button>
-        <button data-act="del">✕</button>
-      </div>`;
-    row.querySelector('[data-act="up"]').addEventListener("click", ()=>{
-      [routineDraftExercises[i-1], routineDraftExercises[i]] = [routineDraftExercises[i], routineDraftExercises[i-1]];
-      renderRoutineDraftList();
-    });
-    row.querySelector('[data-act="down"]').addEventListener("click", ()=>{
-      [routineDraftExercises[i+1], routineDraftExercises[i]] = [routineDraftExercises[i], routineDraftExercises[i+1]];
-      renderRoutineDraftList();
-    });
-    row.querySelector('[data-act="del"]').addEventListener("click", ()=>{
-      routineDraftExercises.splice(i,1); renderRoutineDraftList();
-    });
-    wrap.appendChild(row);
-  });
-}
-function openRoutineSheet(routine){
-  editingRoutineId = routine ? routine.id : null;
-  document.getElementById("routineFormTitle").textContent = routine ? "Edit routine" : "Create routine";
-  document.getElementById("routineNameInput").value = routine ? routine.name : "";
-  routineDraftExercises = routine ? JSON.parse(JSON.stringify(routine.exercises)) : [];
-  populateRoutinePicker();
-  renderRoutineDraftList();
-  showSheet("routineBackdrop");
-}
-document.getElementById("createRoutineBtn").addEventListener("click", ()=> openRoutineSheet(null));
-document.getElementById("routineCancelBtn").addEventListener("click", ()=> hideSheet("routineBackdrop"));
-document.getElementById("routineAddExerciseBtn").addEventListener("click", ()=>{
-  const sel = document.getElementById("routineExercisePicker");
-  const opts = allExerciseOptions();
-  const chosen = opts[+sel.value];
-  if(!chosen){ toast("Pick an exercise"); return; }
-  const sets = document.getElementById("routineSetsInput").value ? +document.getElementById("routineSetsInput").value : null;
-  const reps = document.getElementById("routineRepsInput").value.trim();
-  const rest = document.getElementById("routineRestInput").value.trim();
-  routineDraftExercises.push({name:chosen.name, sets, reps, rest, sourceType:chosen.sourceType, sourceId:chosen.sourceId||null});
-  document.getElementById("routineSetsInput").value = "";
-  document.getElementById("routineRepsInput").value = "";
-  document.getElementById("routineRestInput").value = "";
-  renderRoutineDraftList();
+  bf = Math.max(2, Math.min(bf, 60));
+  lastBfResult = Math.round(bf*10)/10;
+  document.getElementById("bfResultOut").textContent = lastBfResult + "%";
+  document.getElementById("bfResultRow").classList.remove("hidden");
+  document.getElementById("bfUseValueBtn").classList.remove("hidden");
 });
-document.getElementById("routineSaveBtn").addEventListener("click", ()=>{
-  const name = document.getElementById("routineNameInput").value.trim();
-  if(!name){ toast("Routine name is required"); return; }
-  if(routineDraftExercises.length===0){ toast("Add at least one exercise"); return; }
-  if(editingRoutineId){
-    const idx = state.routines.findIndex(r=>r.id===editingRoutineId);
-    if(idx>-1) state.routines[idx] = {...state.routines[idx], name, exercises:routineDraftExercises};
-  } else {
-    state.routines.push({id:Date.now()+"", name, exercises:routineDraftExercises});
-  }
-  saveState();
-  hideSheet("routineBackdrop");
-  renderRoutines();
-  toast("Routine saved");
+document.getElementById("bfUseValueBtn").addEventListener("click", ()=>{
+  document.getElementById("bodyFatInput").value = lastBfResult;
+  toast("Filled into the log form above — tap + Log entry to save it");
 });
 
-function renderRoutines(){
-  document.getElementById("routineSessionActive").classList.toggle("hidden", !activeSessionId);
-  document.getElementById("routinesListWrap").classList.toggle("hidden", !!activeSessionId);
-  if(activeSessionId){ renderActiveSession(); return; }
-
-  const list = document.getElementById("routinesList");
-  list.innerHTML = "";
-  if(state.routines.length===0){
-    list.innerHTML = `<p class="hint">No routines yet. Create one to reuse it anytime.</p>`;
+/* 3D body model (Three.js, loaded as a separate ES module — see body-model.js) */
+let bodyModelInitialized = false;
+let autoRotateOn = true;
+window.addEventListener("bodymodel-ready", ()=>{ if(fitnessSeg==="body") initBodyModelIfNeeded(); });
+function initBodyModelIfNeeded(){
+  if(bodyModelInitialized) return;
+  const canvas = document.getElementById("bodyModelCanvas");
+  const fallback = document.getElementById("bodyModelFallback");
+  if(!canvas || !window.BodyModel) return;
+  try{
+    window.BodyModel.init(canvas);
+    bodyModelInitialized = true;
+    updateBodyModelFromLatest();
+  }catch(e){
+    fallback.classList.remove("hidden");
+    canvas.classList.add("hidden");
   }
-  state.routines.forEach(r=>{
-    const card = document.createElement("div");
-    card.className = "goal-card";
-    card.innerHTML = `
-      <div class="goal-title">${escapeHtml(r.name)}</div>
-      <div class="hint">${r.exercises.length} exercise${r.exercises.length!==1?"s":""}</div>
-      <div class="goal-actions">
-        <button class="mini-btn" data-act="start">Start Routine</button>
-        <button class="mini-btn" data-act="edit">Edit</button>
-        <button class="mini-btn" data-act="dup">Duplicate</button>
-        <button class="mini-btn delete" data-act="del">Delete</button>
-      </div>`;
-    card.querySelector('[data-act="start"]').addEventListener("click", ()=> startRoutineSession(r));
-    card.querySelector('[data-act="edit"]').addEventListener("click", ()=> openRoutineSheet(r));
-    card.querySelector('[data-act="dup"]').addEventListener("click", ()=>{
-      state.routines.push({...JSON.parse(JSON.stringify(r)), id:Date.now()+"", name:r.name+" (copy)"});
-      saveState(); renderRoutines(); toast("Routine duplicated");
-    });
-    card.querySelector('[data-act="del"]').addEventListener("click", ()=>{
-      if(!confirm("Delete this routine? Its past sessions stay in your history.")) return;
-      state.routines = state.routines.filter(x=>x.id!==r.id);
-      saveState(); renderRoutines(); toast("Routine deleted");
-    });
-    list.appendChild(card);
+}
+function updateBodyModelFromLatest(){
+  if(!bodyModelInitialized || !window.BodyModel) return;
+  const latest = [...state.bodyLogs].sort((a,b)=> b.date.localeCompare(a.date))[0];
+  window.BodyModel.applyBodyStats({
+    heightCm: state.profile.heightCm,
+    weightKg: latest ? latest.weight : null,
+    bodyFatPct: latest ? latest.bodyFatPct : null,
   });
-
-  const recentWrap = document.getElementById("recentSessionsList");
-  recentWrap.innerHTML = "";
-  const recent = [...state.routineWorkoutLogs].sort((a,b)=> b.date.localeCompare(a.date)).slice(0,10);
-  if(recent.length===0){
-    recentWrap.innerHTML = `<p class="hint">No sessions logged yet.</p>`;
+}
+document.getElementById("bodyModelAutoRotateBtn").addEventListener("click", ()=>{
+  autoRotateOn = !autoRotateOn;
+  if(window.BodyModel) window.BodyModel.setAutoRotate(autoRotateOn);
+});
+function renderBody(){
+  document.getElementById("profileHeightInput").value = state.profile.heightCm || "";
+  renderBodyLog();
+  initBodyModelIfNeeded();
+  if(bodyModelInitialized && window.BodyModel) window.BodyModel.resize();
+  else {
+    setTimeout(()=>{
+      if(!bodyModelInitialized && fitnessSeg==="body"){
+        document.getElementById("bodyModelFallback").classList.remove("hidden");
+        document.getElementById("bodyModelCanvas").classList.add("hidden");
+      }
+    }, 2500);
   }
-  recent.forEach(s=>{
-    const total = s.exercises.reduce((sum,e)=> sum+(e.targetSets||1),0);
-    const done = s.exercises.reduce((sum,e)=> sum+e.loggedSets.filter(Boolean).length,0);
-    const cls = done>=total && total>0 ? "pill-excellent" : (done>0 ? "pill-fair" : "pill-poor");
-    const label = done>=total && total>0 ? "Done" : (done>0 ? "Partial" : "Not started");
-    const row = document.createElement("div");
-    row.className = "history-row";
-    row.innerHTML = `
-      <div>
-        <div class="history-date">${escapeHtml(s.routineName)}</div>
-        <div class="history-focus">${new Date(s.date).toLocaleDateString(undefined,{day:"numeric",month:"short"})} · ${done}/${total} sets</div>
-      </div>
-      <span class="rating-pill ${cls}">${label}</span>`;
-    row.addEventListener("click", ()=>{ activeSessionId = s.id; renderRoutines(); });
-    recentWrap.appendChild(row);
-  });
-}
-function startRoutineSession(routine){
-  const session = {
-    id: Date.now()+"",
-    date: todayKey(),
-    routineId: routine.id,
-    routineName: routine.name,
-    exercises: routine.exercises.map(e=>({
-      name: e.name, targetSets: e.sets||1, targetReps: e.reps||e.duration||"", loggedSets: Array(e.sets||1).fill(false)
-    })),
-    completedAt: null,
-  };
-  state.routineWorkoutLogs.push(session);
-  saveState();
-  activeSessionId = session.id;
-  renderRoutines();
-}
-document.getElementById("closeSessionBtn").addEventListener("click", ()=>{
-  activeSessionId = null;
-  renderRoutines();
-});
-function renderActiveSession(){
-  const session = state.routineWorkoutLogs.find(s=>s.id===activeSessionId);
-  if(!session){ activeSessionId=null; renderRoutines(); return; }
-  document.getElementById("activeSessionLabel").textContent =
-    `${session.routineName} — ${new Date(session.date).toLocaleDateString(undefined,{day:"numeric",month:"short"})}`;
-  const list = document.getElementById("sessionExerciseList");
-  list.innerHTML = "";
-  let total=0, done=0;
-  session.exercises.forEach((ex,exIdx)=>{
-    total += ex.targetSets;
-    done += ex.loggedSets.filter(Boolean).length;
-    const card = document.createElement("div");
-    card.className = "workout-exercise-card" + (ex.loggedSets.every(Boolean)?" complete":"");
-    const pips = ex.loggedSets.map((on,si)=>`<div class="set-pip ${on?"done":""}" data-ex="${exIdx}" data-set="${si}">${si+1}</div>`).join("");
-    card.innerHTML = `
-      <div class="workout-ex-top">
-        <div>
-          <div class="workout-ex-name">${escapeHtml(ex.name)}</div>
-          <div class="workout-ex-target">${ex.targetSets} sets ${ex.targetReps?"× "+escapeHtml(ex.targetReps):""}</div>
-        </div>
-      </div>
-      <div class="set-pips">${pips}</div>`;
-    card.querySelectorAll(".set-pip").forEach(pip=>{
-      pip.addEventListener("click", ()=>{
-        const si = +pip.dataset.set;
-        ex.loggedSets[si] = !ex.loggedSets[si];
-        session.completedAt = session.exercises.every(e=>e.loggedSets.every(Boolean)) ? todayKey() : null;
-        saveState();
-        renderActiveSession();
-      });
-    });
-    list.appendChild(card);
-  });
-  const pct = total ? done/total : 0;
-  const r = ratingLabel(pct);
-  document.getElementById("sessionRating").innerHTML =
-    `<span>Progress: <b class="mono">${done}/${total} sets</b> (${Math.round(pct*100)}%)</span><span class="rating-pill ${r.cls}">${r.label}</span>`;
-}
-document.getElementById("stepsInput").addEventListener("input", (e)=>{
-  state.stepLogs[todayKey()] = +e.target.value || 0;
-  saveState();
-  updateHomeStepsStat();
-});
-function updateHomeStepsStat(){
-  const wrap = document.getElementById("stepsStatWrap");
-  wrap.classList.toggle("hidden", !state.settings.stepsOn);
-  document.getElementById("stepsStatNum").textContent = state.stepLogs[todayKey()] || 0;
 }
 
 /* ---------- ANALYTICS ---------- */
@@ -1420,11 +1062,11 @@ function renderAnalytics(){
   }).join("");
 
   /* Fitness extras */
-  document.getElementById("anaCustomWorkouts").textContent = state.routineWorkoutLogs.filter(s=>s.completedAt).length;
-  let customUsage = 0;
-  const customNames = new Set(state.customExercises.map(e=>e.name));
-  state.routineWorkoutLogs.forEach(s=> s.exercises.forEach(e=>{ if(customNames.has(e.name)) customUsage++; }));
-  document.getElementById("anaCustomExUsage").textContent = customUsage;
+  const daysTrained = Object.keys(state.exerciseLogs).filter(k=>state.exerciseLogs[k].length>0).length;
+  document.getElementById("anaCustomWorkouts").textContent = daysTrained;
+  let totalSetsLogged = 0;
+  Object.values(state.exerciseLogs).forEach(entries=> entries.forEach(e=> totalSetsLogged += (e.sets||0)));
+  document.getElementById("anaCustomExUsage").textContent = totalSetsLogged;
 
   /* Money summary */
   const {start:wS, end:wE} = weekRangeFor(new Date());
@@ -2165,11 +1807,11 @@ const ACHIEVEMENTS = [
   {id:"streak_7", title:"Week Warrior", desc:"Reach a 7-day habit streak", icon:"🔥", check: ()=> computeStreak()>=7},
   {id:"streak_30", title:"Month Master", desc:"Reach a 30-day habit streak", icon:"🏆", check: ()=> computeStreak()>=30},
   {id:"streak_100", title:"Centurion", desc:"Reach a 100-day habit streak", icon:"💯", check: ()=> computeStreak()>=100},
-  {id:"first_workout", title:"First Rep", desc:"Complete your first workout day", icon:"💪", check: ()=> Object.keys(state.workoutLogs).some(k=>{ const s=workoutDayStatus(k); return s==="done"||s==="makeup"; })},
-  {id:"fitness_streak_7", title:"On a Roll", desc:"Reach a 7-day fitness streak", icon:"⚡", check: ()=> computeFitnessStreak()>=7},
-  {id:"first_routine", title:"Routine Builder", desc:"Create your first custom routine", icon:"📋", check: ()=> state.routines.length>=1},
-  {id:"first_custom_exercise", title:"Exercise Inventor", desc:"Create a custom exercise", icon:"🛠️", check: ()=> state.customExercises.length>=1},
-  {id:"first_routine_session", title:"Session Complete", desc:"Finish a full routine session", icon:"✅", check: ()=> state.routineWorkoutLogs.some(s=>s.completedAt)},
+  {id:"first_exercise_added", title:"Exercise List Started", desc:"Add your first exercise to track", icon:"📝", check: ()=> state.exerciseNames.length>=1},
+  {id:"first_workout", title:"First Rep", desc:"Log your first exercise entry", icon:"💪", check: ()=> Object.values(state.exerciseLogs).some(entries=>entries.length>0)},
+  {id:"fitness_streak_7", title:"On a Roll", desc:"Log an exercise 7 days in a row", icon:"⚡", check: ()=> computeExerciseLogStreak()>=7},
+  {id:"ten_sessions", title:"Ten Sessions", desc:"Log exercises on 10 different days", icon:"🔟", check: ()=> Object.keys(state.exerciseLogs).filter(k=>state.exerciseLogs[k].length>0).length>=10},
+  {id:"body_fat_calculated", title:"Know Your Numbers", desc:"Calculate your body fat % for the first time", icon:"📊", check: ()=> state.bodyLogs.some(b=>b.bodyFatPct!=null)},
   {id:"first_tx", title:"Money Tracker", desc:"Log your first transaction", icon:"💰", check: ()=> state.transactions.length>=1},
   {id:"positive_month", title:"In the Green", desc:"End a month with positive savings", icon:"📈", check: ()=> MONTHS.some((m,i)=> monthSavings(i)>0)},
   {id:"first_goal_done", title:"Goal Getter", desc:"Fully fund a savings goal", icon:"🎯", check: ()=> state.goals.some(g=> g.cost>0 && (g.saved||0)>=g.cost)},

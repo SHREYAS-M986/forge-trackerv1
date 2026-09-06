@@ -110,85 +110,88 @@
   <!-- FITNESS -->
   <section class="view hidden" id="view-fitness" data-view-name="fitness">
     <div class="segmented" id="fitnessSeg">
-      <button class="seg-btn active" data-fseg="today">Today</button>
-      <button class="seg-btn" data-fseg="history">History</button>
+      <button class="seg-btn active" data-fseg="log">Log</button>
+      <button class="seg-btn" data-fseg="exercises">Exercises</button>
+      <button class="seg-btn" data-fseg="records">Records</button>
       <button class="seg-btn" data-fseg="body">Body</button>
-      <button class="seg-btn" data-fseg="routines">Routines</button>
-      <button class="seg-btn" data-fseg="library">Library</button>
     </div>
 
-    <div id="fseg-today">
-      <div class="viewing-banner hidden" id="viewingDateBanner">
-        <span id="viewingDateLabel"></span>
-        <button class="mini-btn" id="backToTodayBtn">Back to Today</button>
-      </div>
-      <div class="workout-header">
-        <div class="workout-focus" id="workoutFocus">Push Day</div>
-        <div class="workout-meta" id="workoutMeta">Week 1 · Phase 1: Foundation</div>
-      </div>
-      <div class="rating-row" id="workoutRating"></div>
-      <div class="workout-status-row" id="workoutStatusRow"></div>
-
+    <div id="fseg-log">
       <div id="stepsCardWrap" class="hidden">
-        <h3 class="section-title">Steps today</h3>
         <div class="form-card">
-          <label>Steps walked<input type="number" id="stepsInput" inputmode="numeric" placeholder="e.g. 6500" /></label>
+          <label>Steps today<input type="number" id="stepsInput" inputmode="numeric" placeholder="e.g. 6500" /></label>
         </div>
       </div>
 
-      <h3 class="section-title">Exercises</h3>
-      <p class="hint" id="makeupHint"></p>
-      <div class="card-list" id="todayExerciseList"></div>
+      <div class="month-nav">
+        <button id="prevExerciseDay" class="icon-btn">‹</button>
+        <div class="month-label" id="exerciseDateLabel">Today</div>
+        <button id="nextExerciseDay" class="icon-btn">›</button>
+      </div>
 
-      <button class="add-btn secondary" id="skipSessionBtn">Skip this session (rest / injury)</button>
+      <div class="form-card">
+        <label>Exercise<select id="logExerciseSelect"></select></label>
+        <div class="mh-field-row">
+          <input type="number" id="logSetsInput" placeholder="Sets" inputmode="numeric" />
+          <input type="number" id="logRepsInput" placeholder="Reps" inputmode="numeric" />
+        </div>
+        <button class="add-btn" id="addExerciseLogBtn">+ Add entry</button>
+      </div>
+
+      <h3 class="section-title">Logged this day</h3>
+      <div class="card-list" id="exerciseLogList"></div>
     </div>
 
-    <div id="fseg-history" class="hidden">
-      <p class="hint">Last 21 days. Tap any day to view or log it — logging sets on a past missed day automatically marks it as a make-up.</p>
-      <div class="card-list" id="workoutHistoryList"></div>
+    <div id="fseg-exercises" class="hidden">
+      <div class="form-card">
+        <label>New exercise name<input type="text" id="newExerciseNameInput" placeholder="e.g. Push-ups" /></label>
+        <button class="add-btn secondary" id="addExerciseNameBtn">+ Add exercise</button>
+      </div>
+      <div id="exerciseNameList"></div>
+    </div>
+
+    <div id="fseg-records" class="hidden">
+      <p class="hint">Your all-time best sets and best reps for each exercise, from every entry you've ever logged.</p>
+      <div class="card-list" id="recordsList"></div>
     </div>
 
     <div id="fseg-body" class="hidden">
       <div class="form-card">
+        <label>Height (cm)<input type="number" id="profileHeightInput" inputmode="numeric" /></label>
+      </div>
+
+      <div class="form-card">
         <label>Weight (kg)<input type="number" step="0.1" id="bodyWeightInput" inputmode="decimal" /></label>
         <label>Waist (cm) — optional<input type="number" step="0.1" id="bodyWaistInput" inputmode="decimal" /></label>
+        <label>Body fat % — optional<input type="number" step="0.1" id="bodyFatInput" inputmode="decimal" /></label>
         <button class="add-btn" id="addBodyLogBtn">+ Log entry</button>
       </div>
       <h3 class="section-title">Recent entries</h3>
       <div class="card-list" id="bodyLogList"></div>
-    </div>
 
-    <div id="fseg-routines" class="hidden">
-      <div id="routineSessionActive" class="hidden">
-        <div class="viewing-banner">
-          <span id="activeSessionLabel"></span>
-          <button class="mini-btn" id="closeSessionBtn">Back to Routines</button>
+      <h3 class="section-title">Body fat % calculator</h3>
+      <p class="hint">U.S. Navy method — an estimate from tape-measure circumferences, not a substitute for a real body-composition scan.</p>
+      <div class="form-card">
+        <div class="segmented" id="bfSexSeg">
+          <button class="seg-btn active" data-sex="male">Male</button>
+          <button class="seg-btn" data-sex="female">Female</button>
         </div>
-        <div class="rating-row" id="sessionRating"></div>
-        <div class="card-list" id="sessionExerciseList"></div>
+        <label>Height (cm)<input type="number" id="bfHeightInput" inputmode="numeric" /></label>
+        <label>Neck (cm)<input type="number" step="0.1" id="bfNeckInput" inputmode="decimal" /></label>
+        <label>Waist (cm)<input type="number" step="0.1" id="bfWaistInput" inputmode="decimal" /></label>
+        <label id="bfHipWrap" class="hidden">Hip (cm)<input type="number" step="0.1" id="bfHipInput" inputmode="decimal" /></label>
+        <button class="add-btn secondary" id="bfCalculateBtn">Calculate</button>
+        <div class="derived-row hidden" id="bfResultRow"><span>Estimated body fat</span><b id="bfResultOut" class="mono">—</b></div>
+        <button class="add-btn hidden" id="bfUseValueBtn">Use this value</button>
       </div>
-      <div id="routinesListWrap">
-        <button class="add-btn" id="createRoutineBtn">+ Create routine</button>
-        <div class="card-list" id="routinesList"></div>
-        <h3 class="section-title">Recent sessions</h3>
-        <div class="card-list" id="recentSessionsList"></div>
-      </div>
-    </div>
 
-    <div id="fseg-library" class="hidden">
-      <div class="segmented" id="librarySeg">
-        <button class="seg-btn active" data-lseg="calisthenics">Calisthenics</button>
-        <button class="seg-btn" data-lseg="looksmaxing">Looksmaxing</button>
-        <button class="seg-btn" data-lseg="myexercises">My Exercises</button>
+      <h3 class="section-title">3D body model</h3>
+      <p class="hint">Illustrative only — an approximation that scales with your latest logged weight, body fat %, and height. Drag to rotate.</p>
+      <div class="body-model-card">
+        <canvas id="bodyModelCanvas"></canvas>
+        <div class="body-model-fallback hidden" id="bodyModelFallback">3D preview isn't supported on this browser.</div>
       </div>
-      <div id="lseg-builtin">
-        <p class="hint" id="fitnessHint"></p>
-        <div class="card-list" id="exerciseList"></div>
-      </div>
-      <div id="lseg-myexercises" class="hidden">
-        <button class="add-btn" id="createExerciseBtn">+ Create exercise</button>
-        <div class="card-list" id="myExercisesList"></div>
-      </div>
+      <button class="add-btn secondary" id="bodyModelAutoRotateBtn">Toggle auto-rotate</button>
     </div>
   </section>
 
@@ -222,8 +225,8 @@
 
     <h3 class="section-title">Fitness extras</h3>
     <div class="stat-grid">
-      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomWorkouts">0</div><div class="mini-stat-label">Custom workouts completed</div></div>
-      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomExUsage">0</div><div class="mini-stat-label">Custom exercise uses</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomWorkouts">0</div><div class="mini-stat-label">Days trained</div></div>
+      <div class="mini-stat"><div class="mini-stat-num mono" id="anaCustomExUsage">0</div><div class="mini-stat-label">Total sets logged</div></div>
     </div>
 
     <h3 class="section-title">Money summary</h3>
@@ -646,7 +649,7 @@
 </nav>
 
 <script src="chart.min.js"></script>
-<script src="workout-plan.js"></script>
+<script type="module" src="body-model.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
