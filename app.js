@@ -83,12 +83,19 @@ const DEFAULT_STATE = () => ({
   goals: [],
   learn: [],
   journalEntries: {},  // "YYYY-MM-DD" -> {text, updatedAt}
+  reviews: { weekly:{}, monthly:{}, yearly:{} },
+  appLock: { enabled:false, pinHash:null, salt:null },
   unlockedAchievements: {}, // id -> unlockedAt timestamp
   settings: {
     notifOn:false, reminderTime:"20:00", taskNotifOn:true,
     stepsOn:false, weightOn:false, weightDay:1, lastWeightPromptWeek:null,
     reduceMotion:false, theme:"classic", sectionBackgrounds:{},
     habitGroupingOn:true, migratedToV2:false,
+    quietHoursOn:false, quietStart:"22:30", quietEnd:"07:00",
+    onboardingDone:false,
+    homeCards: ["ring","discipline","xp","habits","trend"],
+    hiddenHomeCards: [],
+    lastBackupAt: null,
   },
 });
 
@@ -273,7 +280,7 @@ document.querySelectorAll(".sheet-item").forEach(btn=>{
 });
 
 /* ---------- Navigation with slide transition ---------- */
-const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","journal","achievements","settings"];
+const VIEWS = ["home","habits","fitness","analytics","money","goals","learn","calendar","journal","achievements","reviews","settings"];
 function showView(name){
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view===name));
   const target = document.getElementById("view-"+name);
@@ -308,6 +315,7 @@ function runViewRenderer(name){
   if(name==="calendar") renderCalendar();
   if(name==="journal") renderJournal();
   if(name==="achievements") renderAchievements();
+  if(name==="reviews") renderReviews();
   if(name==="settings") renderSettings();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
@@ -358,8 +366,42 @@ function renderHome(){
   stepsWrap.classList.toggle("hidden", !state.settings.stepsOn);
   document.getElementById("stepsStatNum").textContent = state.stepLogs[key] || 0;
 
+  renderDisciplineCard(key);
+  renderXPCard();
   renderTrendChart();
   maybePromptWeight();
+}
+
+function renderDisciplineCard(key){
+  const card = document.getElementById("disciplineCard");
+  const {score, components} = computeDisciplineScore(key);
+  if(score==null){
+    card.innerHTML = `<div class="discipline-empty">Discipline Score appears once you're using at least one module (Habits, Fitness, Learning, Money, or Tasks).</div>`;
+    return;
+  }
+  const rows = components.map(c=> `<div class="discipline-row"><span>${escapeHtml(c.label)}</span><b>${c.score}%</b></div>`).join("");
+  card.innerHTML = `
+    <div class="discipline-top">
+      <span class="discipline-score">${score}/100</span>
+      <span class="discipline-rating">${disciplineRatingLabel(score)}</span>
+    </div>
+    <div class="discipline-breakdown">${rows}</div>`;
+}
+function renderXPCard(){
+  const card = document.getElementById("xpCard");
+  const xp = computeTotalXP();
+  const level = computeLevel(xp);
+  const rank = rankForLevel(level);
+  const curFloor = xpForLevel(level);
+  const nextFloor = xpForLevel(level+1);
+  const pct = Math.round(((xp-curFloor)/(nextFloor-curFloor))*100);
+  card.innerHTML = `
+    <div class="xp-rank-icon">${rankFlagSvg(rank.color)}</div>
+    <div class="xp-info">
+      <div class="xp-level-line">Level ${level} — ${escapeHtml(rank.name)}</div>
+      <div class="xp-track"><div class="xp-fill" style="width:${pct}%"></div></div>
+      <div class="xp-total">${xp} XP total · ${nextFloor-xp} XP to next level</div>
+    </div>`;
 }
 
 /* Reusable habit card: checkbox toggle OR numeric progress + quick-add + manual entry */
@@ -459,6 +501,124 @@ function computeStreak(){
     else break;
   }
   return streak;
+}
+
+/* ---- Discipline Score: a daily 0-100 score built only from modules the user actually uses ---- */
+function computeDisciplineScore(dateKey){
+  const components = [];
+
+  if(state.habits.daily.length>0){
+    const log = state.dailyLogs[dateKey] || [];
+    let pctSum = 0;
+    state.habits.daily.forEach((h,i)=> pctSum += entryProgress(log[i], h).pct);
+    const pct = pctSum / state.habits.daily.length;
+    components.push({label:"Habits", weight:40, score: Math.round(pct*100)});
+  }
+  const fitnessEverUsed = state.exerciseNames.length>0;
+  if(fitnessEverUsed){
+    const loggedToday = (state.exerciseLogs[dateKey]||[]).length>0;
+    let score = loggedToday ? 100 : 0;
+    if(state.settings.stepsOn){
+      const stepsOk = (state.stepLogs[dateKey]||0) > 0;
+      score = Math.round((score + (stepsOk?100:0)) / 2);
+    }
+    components.push({label:"Fitness", weight:20, score});
+  }
+  if(state.learn.length>0){
+    const healthy = state.learn.filter(l=> l.status==="Done" || l.status==="In Progress").length;
+    components.push({label:"Learning", weight:15, score: Math.round((healthy/state.learn.length)*100)});
+  }
+  if(state.transactions.length>0){
+    components.push({label:"Money", weight:15, score: txOnDate(dateKey).length>0 ? 100 : 0});
+  }
+  if(state.tasks.length>0){
+    const dueToday = state.tasks.filter(t=>t.dueDate===dateKey);
+    const score = dueToday.length===0 ? 100 : Math.round((dueToday.filter(t=>t.done).length/dueToday.length)*100);
+    components.push({label:"Tasks", weight:10, score});
+  }
+
+  if(components.length===0) return {score:null, components:[]};
+  const totalWeight = components.reduce((s,c)=>s+c.weight,0);
+  const weighted = components.reduce((s,c)=> s + c.score*(c.weight/totalWeight), 0);
+  return {score: Math.round(weighted), components};
+}
+function disciplineRatingLabel(score){
+  if(score>=90) return "Excellent Day";
+  if(score>=75) return "Good Day";
+  if(score>=55) return "Fair Day";
+  if(score>=30) return "Poor Day";
+  return "Very Poor Day";
+}
+function computeDisciplineStreakAbove(threshold){
+  let streak=0; let d=new Date();
+  while(true){
+    const {score} = computeDisciplineScore(fmtDate(d));
+    if(score!=null && score>=threshold){ streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+
+/* ---- XP / Levels / One Piece rank (computed dynamically from real activity, no farmable ledger) ---- */
+function computeDailyXP(dateKey){
+  let xp = 0;
+  const log = state.dailyLogs[dateKey] || [];
+  state.habits.daily.forEach((h,i)=>{ if(entryCountsAsDone(log[i], h)) xp += 2; });
+  if((state.exerciseLogs[dateKey]||[]).length>0) xp += 10;
+  if(txOnDate(dateKey).length>0) xp += 5;
+  if(state.journalEntries[dateKey]) xp += 5;
+  return Math.min(xp, 100); // daily cap on recurring sources, so no single day can be farmed indefinitely
+}
+function computeTotalXP(){
+  const dates = new Set([
+    ...Object.keys(state.dailyLogs),
+    ...Object.keys(state.exerciseLogs),
+    ...Object.keys(state.journalEntries),
+  ]);
+  state.transactions.forEach(t=> dates.add(t.date));
+  let xp = 0;
+  dates.forEach(d=> xp += computeDailyXP(d));
+  xp += state.tasks.filter(t=>t.done).length * 5;       // one-time bonus per completed task
+  xp += state.learn.filter(l=>l.status==="Done").length * 15; // one-time bonus per finished topic
+  return xp;
+}
+function xpForLevel(level){ return (level-1) * 150; }
+function computeLevel(xp){
+  let level = 1;
+  while(xp >= xpForLevel(level+1)) level++;
+  return level;
+}
+const RANKS = [
+  {name:"Rookie",     minLevel:1,  color:"#8991B3"},
+  {name:"Pirate",     minLevel:6,  color:"#8FE3D0"},
+  {name:"Grand Line", minLevel:16, color:"#F9C74F"},
+  {name:"Supernova",  minLevel:31, color:"#C9A6F7"},
+  {name:"New World",  minLevel:51, color:"#F4879C"},
+  {name:"Yonko",      minLevel:81, color:"#FFD700"},
+];
+function rankForLevel(level){
+  let r = RANKS[0];
+  RANKS.forEach(rk=>{ if(level>=rk.minLevel) r = rk; });
+  return r;
+}
+function rankFlagSvg(color){
+  return `<svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+    <line x1="6" y1="2" x2="6" y2="22" stroke="${color}" stroke-width="1.6"/>
+    <path d="M6 3 L19 6.5 L6 10 Z" fill="${color}"/>
+  </svg>`;
+}
+function monthHabitPct(i){
+  const dailyTotal = state.habits.daily.length;
+  if(dailyTotal===0) return 0;
+  const m = MONTHS[i];
+  const start = monthStartDate(i);
+  let done = 0;
+  for(let d=1; d<=m.days; d++){
+    const key = fmtDate(new Date(start.getFullYear(), start.getMonth(), d));
+    const log = state.dailyLogs[key] || [];
+    done += state.habits.daily.filter((h,hi)=> entryCountsAsDone(log[hi], h)).length;
+  }
+  return done / (dailyTotal*m.days);
 }
 
 function renderTrendChart(){
@@ -1083,6 +1243,7 @@ function renderAnalytics(){
   document.getElementById("anaMonthExpense").textContent = "₹"+mExpense.toLocaleString("en-IN");
   document.getElementById("anaMonthRate").textContent = mRate+"%";
   document.getElementById("anaAvgDailySpend").textContent = "₹"+Math.round(mExpense/MONTHS[curMonthIdx].days).toLocaleString("en-IN");
+  renderInsights();
 }
 
 /* ---------- MONEY (daily transaction system) ---------- */
@@ -1689,6 +1850,7 @@ function renderTaskCards(containerId, tasks, showEmpty){
 
 function checkTaskReminders(){
   if(!state.settings.taskNotifOn) return;
+  if(inQuietHours()) return;
   if(!("Notification" in window) || Notification.permission!=="granted") return;
   const todayStr = todayKey();
   let changed=false;
@@ -1820,7 +1982,44 @@ const ACHIEVEMENTS = [
   {id:"first_task_done", title:"Task Slayer", desc:"Complete your first calendar task", icon:"✔️", check: ()=> state.tasks.some(t=>t.done)},
   {id:"first_learn_done", title:"Lifelong Learner", desc:"Finish something on your Learn list", icon:"🎓", check: ()=> state.learn.some(l=>l.status==="Done")},
   {id:"first_weight", title:"Checked In", desc:"Log your weight for the first time", icon:"⚖️", check: ()=> Object.keys(state.weightLogs).length>0 || state.bodyLogs.length>0},
+  {id:"streak_365", title:"Year Unbroken", desc:"Reach a 365-day habit streak", icon:"👑", check: ()=> computeStreak()>=365},
+  {id:"month_90pct", title:"Near-Perfect Month", desc:"Complete 90% of a month's daily habits", icon:"🌟", check: ()=> MONTHS.some((m,i)=> monthHabitPct(i)>=0.9)},
+  {id:"fifty_sessions", title:"Fifty Sessions", desc:"Log exercises on 50 different days", icon:"5️⃣0️⃣", check: ()=> Object.keys(state.exerciseLogs).filter(k=>state.exerciseLogs[k].length>0).length>=50},
+  {id:"hundred_sessions", title:"Hundred Sessions", desc:"Log exercises on 100 different days", icon:"💯", check: ()=> Object.keys(state.exerciseLogs).filter(k=>state.exerciseLogs[k].length>0).length>=100},
+  {id:"first_pr", title:"Chasing a PR", desc:"Log the same exercise more than once to start tracking progress", icon:"📈", check: ()=> state.exerciseNames.some(name=>{
+    let count=0; Object.values(state.exerciseLogs).forEach(entries=>entries.forEach(e=>{ if(e.exerciseName===name) count++; })); return count>=2;
+  })},
+  {id:"first_savings_day", title:"First Savings", desc:"End a single day with more income than spending", icon:"🪙", check: ()=> {
+    const dates = new Set(state.transactions.map(t=>t.date));
+    return [...dates].some(d=> sumTx(txOnDate(d),"income") > sumTx(txOnDate(d),"expense"));
+  }},
+  {id:"savings_milestone", title:"Savings Milestone", desc:"Reach ₹10,000 in total net savings", icon:"🏦", check: ()=> (sumTx(state.transactions,"income") - sumTx(state.transactions,"expense")) >= 10000},
+  {id:"first_learn_topic", title:"First Topic", desc:"Add your first thing to learn", icon:"📖", check: ()=> state.learn.length>=1},
+  {id:"learn_10", title:"Curious Mind", desc:"Track 10 things to learn", icon:"🧠", check: ()=> state.learn.length>=10},
+  {id:"learn_30", title:"Knowledge Seeker", desc:"Track 30 things to learn", icon:"🔭", check: ()=> state.learn.length>=30},
+  {id:"learn_deadline", title:"Beat the Deadline", desc:"Finish something on your Learn list before its deadline passes", icon:"⏱️", check: ()=> state.learn.some(l=> l.status==="Done" && l.deadline && l.deadline>=todayKey())},
+  {id:"journal_30", title:"Dedicated Writer", desc:"Write 30 journal entries", icon:"✍️", check: ()=> Object.keys(state.journalEntries).length>=30},
+  {id:"journal_100", title:"Storyteller", desc:"Write 100 journal entries", icon:"📖", check: ()=> Object.keys(state.journalEntries).length>=100},
+  {id:"perfect_week", title:"Perfect Week", desc:"Score 90+ on your Discipline Score for 7 days in a row", icon:"🌈", check: ()=> computeDisciplineStreakAbove(90)>=7},
+  {id:"balanced_week", title:"Balanced Week", desc:"Touch every module you actively use at least once in the last 7 days", icon:"⚖️", check: ()=> computeBalancedWeek()},
 ];
+function computeBalancedWeek(){
+  const activeModules = [];
+  if(state.habits.daily.length>0) activeModules.push("habits");
+  if(state.exerciseNames.length>0) activeModules.push("fitness");
+  if(state.transactions.length>0) activeModules.push("money");
+  if(state.tasks.length>0) activeModules.push("tasks");
+  if(activeModules.length<2) return false;
+  const days = [];
+  for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); days.push(fmtDate(d)); }
+  return activeModules.every(mod=>{
+    if(mod==="habits") return days.some(dt=> (state.dailyLogs[dt]||[]).some((e,i)=> entryCountsAsDone(e, state.habits.daily[i])));
+    if(mod==="fitness") return days.some(dt=> (state.exerciseLogs[dt]||[]).length>0);
+    if(mod==="money") return days.some(dt=> txOnDate(dt).length>0);
+    if(mod==="tasks") return days.some(dt=> state.tasks.some(t=>t.dueDate===dt));
+    return true;
+  });
+}
 function checkAchievements(){
   let unlockedNew = [];
   ACHIEVEMENTS.forEach(a=>{
@@ -2083,16 +2282,25 @@ function renderSettings(){
   document.getElementById("notifToggle").checked = state.settings.notifOn;
   document.getElementById("reminderTime").value = state.settings.reminderTime;
   document.getElementById("taskNotifToggle").checked = state.settings.taskNotifOn;
+  document.getElementById("quietHoursToggle").checked = state.settings.quietHoursOn;
+  document.getElementById("quietStartInput").value = state.settings.quietStart;
+  document.getElementById("quietEndInput").value = state.settings.quietEnd;
   document.getElementById("stepsToggle").checked = state.settings.stepsOn;
   document.getElementById("weightToggle").checked = state.settings.weightOn;
   document.getElementById("weightDaySelect").value = String(state.settings.weightDay);
   document.getElementById("motionToggle").checked = state.settings.reduceMotion;
   document.getElementById("habitGroupingToggle").checked = state.settings.habitGroupingOn;
+  document.getElementById("appLockToggle").checked = state.appLock.enabled;
+  document.getElementById("setPinWrap").classList.toggle("hidden", !state.appLock.enabled);
+  document.getElementById("lastBackupHint").textContent = state.settings.lastBackupAt
+    ? `Last backup: ${Math.round((Date.now()-state.settings.lastBackupAt)/86400000)} day(s) ago`
+    : "No backup taken yet — consider exporting one.";
   document.querySelectorAll(".theme-swatch").forEach(el=>{
     el.classList.toggle("active", el.dataset.theme === (state.settings.theme||"classic"));
   });
   renderManageList();
   renderBgSectionList();
+  renderHomeCardsList();
 }
 document.querySelectorAll(".theme-swatch").forEach(el=>{
   el.addEventListener("click", ()=>{
@@ -2142,8 +2350,19 @@ document.getElementById("logWeightNowBtn").addEventListener("click", ()=>{
   showSheet("weightBackdrop");
 });
 
+function inQuietHours(){
+  if(!state.settings.quietHoursOn) return false;
+  const now = new Date();
+  const cur = now.getHours()*60 + now.getMinutes();
+  const [sh,sm] = (state.settings.quietStart||"22:30").split(":").map(Number);
+  const [eh,em] = (state.settings.quietEnd||"07:00").split(":").map(Number);
+  const start = sh*60+sm, end = eh*60+em;
+  if(start<end) return cur>=start && cur<end;
+  return cur>=start || cur<end; // window wraps past midnight
+}
 function checkReminderLoop(){
   if(!state.settings.notifOn) return;
+  if(inQuietHours()) return;
   const now = new Date();
   const [h,m] = (state.settings.reminderTime||"20:00").split(":").map(Number);
   if(now.getHours()===h && now.getMinutes()===m){
@@ -2162,6 +2381,8 @@ document.getElementById("exportBtn").addEventListener("click", ()=>{
   a.href = URL.createObjectURL(blob);
   a.download = `forge-backup-${todayKey()}.json`;
   a.click();
+  state.settings.lastBackupAt = Date.now();
+  saveState();
   toast("Backup downloaded");
 });
 document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
@@ -2190,6 +2411,342 @@ document.getElementById("resetBtn").addEventListener("click", ()=>{
     showView("home");
   }
 });
+
+/* ---------- QUIET HOURS settings wiring ---------- */
+document.getElementById("quietHoursToggle").addEventListener("change", (e)=>{
+  state.settings.quietHoursOn = e.target.checked; saveState();
+});
+document.getElementById("quietStartInput").addEventListener("change", (e)=>{
+  state.settings.quietStart = e.target.value; saveState();
+});
+document.getElementById("quietEndInput").addEventListener("change", (e)=>{
+  state.settings.quietEnd = e.target.value; saveState();
+});
+
+/* ---------- APP LOCK (PIN) ---------- */
+async function hashPin(pin, salt){
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(pin + ":" + salt));
+  return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function randomHex(bytes){
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+let appLocked = false;
+document.getElementById("appLockToggle").addEventListener("change", (e)=>{
+  document.getElementById("setPinWrap").classList.toggle("hidden", !e.target.checked);
+  if(!e.target.checked){
+    state.appLock = { enabled:false, pinHash:null, salt:null };
+    saveState();
+    toast("App lock disabled");
+  }
+});
+document.getElementById("savePinBtn").addEventListener("click", async ()=>{
+  const pin = document.getElementById("newPinInput").value;
+  const confirmPin = document.getElementById("confirmPinInput").value;
+  if(!/^\d{4,6}$/.test(pin)){ toast("PIN must be 4-6 digits"); return; }
+  if(pin !== confirmPin){ toast("PINs don't match"); return; }
+  const salt = randomHex(16);
+  const hash = await hashPin(pin, salt);
+  state.appLock = { enabled:true, pinHash:hash, salt };
+  saveState();
+  document.getElementById("newPinInput").value = "";
+  document.getElementById("confirmPinInput").value = "";
+  toast("PIN set — app will lock next time it's reopened");
+});
+function showLockScreen(){
+  appLocked = true;
+  document.getElementById("lockScreen").classList.remove("hidden");
+  document.getElementById("lockPinInput").value = "";
+  document.getElementById("lockError").classList.add("hidden");
+  setTimeout(()=> document.getElementById("lockPinInput").focus(), 100);
+}
+function hideLockScreen(){
+  appLocked = false;
+  document.getElementById("lockScreen").classList.add("hidden");
+}
+async function attemptUnlock(){
+  const pin = document.getElementById("lockPinInput").value;
+  const hash = await hashPin(pin, state.appLock.salt);
+  if(hash === state.appLock.pinHash){ hideLockScreen(); }
+  else { document.getElementById("lockError").classList.remove("hidden"); }
+}
+document.getElementById("lockUnlockBtn").addEventListener("click", attemptUnlock);
+document.getElementById("lockPinInput").addEventListener("keydown", (e)=>{ if(e.key==="Enter") attemptUnlock(); });
+document.addEventListener("visibilitychange", ()=>{
+  if(!state.appLock.enabled) return;
+  if(document.hidden){ appLocked = true; }
+  else if(appLocked){ showLockScreen(); }
+});
+
+/* ---------- ENCRYPTED BACKUP (Web Crypto: PBKDF2 + AES-GCM) ---------- */
+async function deriveAesKey(password, saltHex){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), {name:"PBKDF2"}, false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt: enc.encode(saltHex), iterations:100000, hash:"SHA-256"},
+    keyMaterial, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]
+  );
+}
+document.getElementById("exportEncryptedBtn").addEventListener("click", async ()=>{
+  const password = prompt("Set a password for this encrypted backup (you'll need it to restore):");
+  if(!password){ return; }
+  try{
+    const salt = randomHex(16);
+    const key = await deriveAesKey(password, salt);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode(JSON.stringify(state));
+    const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, plaintext);
+    const envelope = {
+      encrypted:true, version:1, salt,
+      iv: Array.from(iv).map(b=>b.toString(16).padStart(2,"0")).join(""),
+      data: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    };
+    const blob = new Blob([JSON.stringify(envelope)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `one-piece-encrypted-backup-${todayKey()}.json`;
+    a.click();
+    state.settings.lastBackupAt = Date.now();
+    saveState();
+    toast("Encrypted backup downloaded");
+  }catch(err){ toast("Couldn't create encrypted backup"); }
+});
+document.getElementById("importEncryptedBtn").addEventListener("click", ()=> document.getElementById("importEncryptedFile").click());
+document.getElementById("importEncryptedFile").addEventListener("change", (e)=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    try{
+      const envelope = JSON.parse(reader.result);
+      if(!envelope.encrypted){ toast("This isn't an encrypted backup file"); return; }
+      const password = prompt("Enter this backup's password:");
+      if(!password) return;
+      const key = await deriveAesKey(password, envelope.salt);
+      const iv = new Uint8Array(envelope.iv.match(/.{2}/g).map(h=>parseInt(h,16)));
+      const ciphertext = Uint8Array.from(atob(envelope.data), c=>c.charCodeAt(0));
+      const plainBuffer = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ciphertext);
+      const parsed = JSON.parse(new TextDecoder().decode(plainBuffer));
+      state = loadStateFrom(parsed);
+      saveState();
+      toast("Encrypted backup restored");
+      showView("home");
+    }catch(err){ toast("Wrong password, or the file is corrupted"); }
+  };
+  reader.readAsText(file);
+});
+
+/* ---------- CSV EXPORTS ---------- */
+function downloadCsv(filename, rows){
+  const csv = rows.map(row=> row.map(cell=>{
+    const s = String(cell ?? "");
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+document.getElementById("exportTxCsvBtn").addEventListener("click", ()=>{
+  const rows = [["Date","Type","Category","Amount","Note"]];
+  state.transactions.forEach(t=> rows.push([t.date, t.type, t.category, t.amount, t.note||""]));
+  downloadCsv(`transactions-${todayKey()}.csv`, rows);
+  toast("Transactions CSV downloaded");
+});
+document.getElementById("exportHabitCsvBtn").addEventListener("click", ()=>{
+  const rows = [["Date", ...state.habits.daily.map(h=>habitName(h))]];
+  Object.keys(state.dailyLogs).sort().forEach(d=>{
+    const log = state.dailyLogs[d];
+    rows.push([d, ...state.habits.daily.map((h,i)=>{
+      const p = entryProgress(log[i], h);
+      return habitType(h)==="numeric" ? (log[i] ?? 0) : (p.state==="done" ? "1" : "0");
+    })]);
+  });
+  downloadCsv(`habit-history-${todayKey()}.csv`, rows);
+  toast("Habit history CSV downloaded");
+});
+document.getElementById("exportFitnessCsvBtn").addEventListener("click", ()=>{
+  const rows = [["Date","Exercise","Sets","Reps"]];
+  Object.keys(state.exerciseLogs).sort().forEach(d=>{
+    state.exerciseLogs[d].forEach(e=> rows.push([d, e.exerciseName, e.sets, e.reps]));
+  });
+  downloadCsv(`fitness-${todayKey()}.csv`, rows);
+  toast("Fitness CSV downloaded");
+});
+document.getElementById("exportWeightCsvBtn").addEventListener("click", ()=>{
+  const rows = [["Date","Weight (kg)","Waist (cm)","Body Fat %"]];
+  [...state.bodyLogs].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=> rows.push([e.date, e.weight, e.waist ?? "", e.bodyFatPct ?? ""]));
+  downloadCsv(`weight-history-${todayKey()}.csv`, rows);
+  toast("Weight history CSV downloaded");
+});
+
+/* ---------- DASHBOARD CUSTOMIZATION ---------- */
+const HOME_CARD_META = {
+  ring: "Progress ring & stats",
+  discipline: "Discipline Score",
+  xp: "XP / Level / Rank",
+  habits: "Today's habit list",
+  trend: "14-day trend chart",
+};
+function renderHomeCardsList(){
+  const wrap = document.getElementById("homeCardsList");
+  if(!wrap) return;
+  wrap.innerHTML = "";
+  state.settings.homeCards.forEach((cardId, idx)=>{
+    const hidden = state.settings.hiddenHomeCards.includes(cardId);
+    const row = document.createElement("div");
+    row.className = "manage-row";
+    row.innerHTML = `
+      <label style="display:flex; align-items:center; gap:8px; flex:1; font-size:13px;">
+        <input type="checkbox" ${hidden?"":"checked"} />
+        ${escapeHtml(HOME_CARD_META[cardId]||cardId)}
+      </label>
+      <button data-act="up" ${idx===0?"disabled":""}>↑</button>
+      <button data-act="down" ${idx===state.settings.homeCards.length-1?"disabled":""}>↓</button>`;
+    row.querySelector('input[type=checkbox]').addEventListener("change", (e)=>{
+      if(e.target.checked) state.settings.hiddenHomeCards = state.settings.hiddenHomeCards.filter(c=>c!==cardId);
+      else state.settings.hiddenHomeCards.push(cardId);
+      saveState();
+      applyHomeCardVisibility();
+    });
+    row.querySelector('[data-act="up"]').addEventListener("click", ()=>{
+      [state.settings.homeCards[idx-1], state.settings.homeCards[idx]] = [state.settings.homeCards[idx], state.settings.homeCards[idx-1]];
+      saveState(); renderHomeCardsList(); applyHomeCardOrder();
+    });
+    row.querySelector('[data-act="down"]').addEventListener("click", ()=>{
+      [state.settings.homeCards[idx+1], state.settings.homeCards[idx]] = [state.settings.homeCards[idx], state.settings.homeCards[idx+1]];
+      saveState(); renderHomeCardsList(); applyHomeCardOrder();
+    });
+    wrap.appendChild(row);
+  });
+}
+function applyHomeCardVisibility(){
+  state.settings.homeCards.forEach(cardId=>{
+    const el = document.getElementById("homeCard-"+cardId);
+    if(el) el.classList.toggle("hidden", state.settings.hiddenHomeCards.includes(cardId));
+  });
+}
+function applyHomeCardOrder(){
+  const container = document.querySelector('[data-view-name="home"]');
+  const banner = document.getElementById("reminderBanner");
+  state.settings.homeCards.forEach(cardId=>{
+    const el = document.getElementById("homeCard-"+cardId);
+    if(el) container.appendChild(el);
+  });
+}
+
+/* ---------- GLOBAL SEARCH ---------- */
+document.getElementById("searchBtn").addEventListener("click", ()=>{
+  showSheet("searchBackdrop");
+  document.getElementById("globalSearchInput").value = "";
+  document.getElementById("searchResults").innerHTML = "";
+  setTimeout(()=> document.getElementById("globalSearchInput").focus(), 150);
+});
+document.getElementById("searchBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id==="searchBackdrop") hideSheet("searchBackdrop");
+});
+document.getElementById("globalSearchInput").addEventListener("input", (e)=> runGlobalSearch(e.target.value.trim().toLowerCase()));
+function runGlobalSearch(q){
+  const wrap = document.getElementById("searchResults");
+  if(!q){ wrap.innerHTML = ""; return; }
+  const groups = [];
+
+  const habitMatches = state.habits.daily.filter(h=>habitName(h).toLowerCase().includes(q));
+  if(habitMatches.length) groups.push({title:"Habits", items: habitMatches.map(h=>({label:habitName(h), sub:"Daily habit", view:"habits"}))});
+
+  const exMatches = state.exerciseNames.filter(n=>n.toLowerCase().includes(q));
+  if(exMatches.length) groups.push({title:"Exercises", items: exMatches.map(n=>({label:n, sub:"Fitness exercise", view:"fitness"}))});
+
+  const txMatches = state.transactions.filter(t=> (t.category||"").toLowerCase().includes(q) || (t.note||"").toLowerCase().includes(q));
+  if(txMatches.length) groups.push({title:"Transactions", items: txMatches.slice(0,10).map(t=>({label:`₹${t.amount} — ${t.category}`, sub:t.date+(t.note?" · "+t.note:""), view:"money"}))});
+
+  const goalMatches = state.goals.filter(g=> g.item.toLowerCase().includes(q));
+  if(goalMatches.length) groups.push({title:"Goals", items: goalMatches.map(g=>({label:g.item, sub:`₹${g.cost}`, view:"goals"}))});
+
+  const learnMatches = state.learn.filter(l=> l.topic.toLowerCase().includes(q));
+  if(learnMatches.length) groups.push({title:"Learn", items: learnMatches.map(l=>({label:l.topic, sub:l.status, view:"learn"}))});
+
+  const taskMatches = state.tasks.filter(t=> t.title.toLowerCase().includes(q) || (t.notes||"").toLowerCase().includes(q));
+  if(taskMatches.length) groups.push({title:"Calendar", items: taskMatches.slice(0,10).map(t=>({label:t.title, sub:t.dueDate, view:"calendar"}))});
+
+  const journalMatches = Object.entries(state.journalEntries).filter(([d,e])=> e.text.toLowerCase().includes(q));
+  if(journalMatches.length) groups.push({title:"Journal", items: journalMatches.slice(0,10).map(([d,e])=>({label:e.text.slice(0,60)+(e.text.length>60?"…":""), sub:d, view:"journal"}))});
+
+  if(groups.length===0){ wrap.innerHTML = `<p class="hint">No matches.</p>`; return; }
+  wrap.innerHTML = groups.map(g=>
+    `<div class="search-group-title">${escapeHtml(g.title)}</div>` +
+    g.items.map(it=> `<div class="search-result-row" data-view="${it.view}"><div>${escapeHtml(it.label)}</div><div class="search-result-sub">${escapeHtml(it.sub)}</div></div>`).join("")
+  ).join("");
+  wrap.querySelectorAll(".search-result-row").forEach(row=>{
+    row.addEventListener("click", ()=>{
+      hideSheet("searchBackdrop");
+      setTimeout(()=> showView(row.dataset.view), 200);
+    });
+  });
+}
+
+/* ---------- QUICK ADD FAB ---------- */
+document.getElementById("quickAddFab").addEventListener("click", ()=> showSheet("quickAddBackdrop"));
+document.getElementById("quickAddBackdrop").addEventListener("click", (e)=>{
+  if(e.target.id==="quickAddBackdrop") hideSheet("quickAddBackdrop");
+});
+document.querySelectorAll('#quickAddBackdrop .sheet-item').forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    hideSheet("quickAddBackdrop");
+    const dest = btn.dataset.quick;
+    const map = {habit:"home", exercise:"fitness", transaction:"money", goal:"goals", learn:"learn", task:"calendar", journal:"journal", weight:"fitness"};
+    setTimeout(()=>{
+      showView(map[dest]);
+      setTimeout(()=>{
+        if(dest==="transaction") document.getElementById("txAmountInput")?.focus();
+        if(dest==="exercise") document.getElementById("logSetsInput")?.focus();
+        if(dest==="weight") document.getElementById("bodyWeightInput")?.focus();
+        if(dest==="journal") document.getElementById("journalTextarea")?.focus();
+        if(dest==="task") document.getElementById("taskTitleInput")?.focus();
+        if(dest==="goal") document.getElementById("addGoalBtn")?.focus();
+        if(dest==="learn") document.getElementById("addLearnBtn")?.focus();
+      }, 250);
+    }, 200);
+  });
+});
+
+/* ---------- ONBOARDING ---------- */
+let obTheme = "classic";
+function showOnboardingStep(n){
+  for(let i=1;i<=6;i++) document.getElementById("obStep"+i).classList.toggle("hidden", i!==n);
+}
+document.querySelectorAll("[data-ob-next]").forEach(btn=>{
+  btn.addEventListener("click", ()=> showOnboardingStep(+btn.dataset.obNext));
+});
+document.getElementById("obSkipAll").addEventListener("click", finishOnboarding);
+document.querySelectorAll("#obThemeSwatches .theme-swatch").forEach(el=>{
+  el.addEventListener("click", ()=>{
+    document.querySelectorAll("#obThemeSwatches .theme-swatch").forEach(x=>x.classList.remove("active"));
+    el.classList.add("active");
+    obTheme = el.dataset.obTheme;
+  });
+});
+document.getElementById("obFinish").addEventListener("click", ()=>{
+  const habitName_ = document.getElementById("obHabitName").value.trim();
+  if(habitName_ && state.habits.daily.length===0){
+    state.habits.daily.push({name:habitName_, type:"checkbox", target:null, unit:"", min:null, time:"anytime"});
+  }
+  state.settings.theme = obTheme;
+  document.body.classList.remove("theme-crimson","theme-ocean","theme-onepiece");
+  if(obTheme!=="classic") document.body.classList.add("theme-"+obTheme);
+  const remTime = document.getElementById("obReminderTime").value;
+  if(remTime) state.settings.reminderTime = remTime;
+  finishOnboarding();
+});
+function finishOnboarding(){
+  state.settings.onboardingDone = true;
+  saveState();
+  document.getElementById("onboardingOverlay").classList.add("hidden");
+  renderHome();
+}
 
 /* ---------- Weekly weight modal logic ---------- */
 function maybePromptWeight(){
@@ -2248,9 +2805,233 @@ if("serviceWorker" in navigator){
   });
 }
 
+/* ---------- REVIEWS (Weekly / Monthly / Year) ---------- */
+let reviewSeg = "week";
+let reviewWeekIdx = weekIndexOf(new Date());
+let reviewMonthIdx = monthIndexOf(new Date());
+
+document.querySelectorAll("#reviewSeg .seg-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("#reviewSeg .seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    reviewSeg = b.dataset.rseg;
+    ["week","month","year"].forEach(s=> document.getElementById("rseg-"+s).classList.toggle("hidden", s!==reviewSeg));
+    renderReviews();
+  });
+});
+document.getElementById("prevReviewWeek").addEventListener("click", ()=>{ reviewWeekIdx=Math.max(0,reviewWeekIdx-1); renderReviews(); });
+document.getElementById("nextReviewWeek").addEventListener("click", ()=>{ reviewWeekIdx=Math.min(51,reviewWeekIdx+1); renderReviews(); });
+document.getElementById("prevReviewMonth").addEventListener("click", ()=>{ reviewMonthIdx=(reviewMonthIdx+11)%12; renderReviews(); });
+document.getElementById("nextReviewMonth").addEventListener("click", ()=>{ reviewMonthIdx=(reviewMonthIdx+1)%12; renderReviews(); });
+
+function weekIndexDateRange(weekIndex){
+  const start = new Date(YEAR_START); start.setDate(start.getDate() + weekIndex*7);
+  const end = new Date(start); end.setDate(start.getDate()+6);
+  return {start: fmtDate(start), end: fmtDate(end)};
+}
+function datesInRange(start, end){
+  const dates=[]; let cur=new Date(start);
+  const endD = new Date(end);
+  while(cur<=endD){ dates.push(fmtDate(cur)); cur.setDate(cur.getDate()+1); }
+  return dates;
+}
+function computeRangeStats(start, end){
+  const dates = datesInRange(start, end);
+  const dailyTotal = state.habits.daily.length;
+  let habitPctSum=0, scoreSum=0, scoreCount=0, workoutDays=0, stepsSum=0, journalCount=0;
+  dates.forEach(d=>{
+    if(dailyTotal>0){
+      const log = state.dailyLogs[d]||[];
+      let pctSum=0; state.habits.daily.forEach((h,i)=>pctSum+=entryProgress(log[i],h).pct);
+      habitPctSum += pctSum/dailyTotal;
+    }
+    const {score} = computeDisciplineScore(d);
+    if(score!=null){ scoreSum+=score; scoreCount++; }
+    if((state.exerciseLogs[d]||[]).length>0) workoutDays++;
+    stepsSum += state.stepLogs[d]||0;
+    if(state.journalEntries[d]) journalCount++;
+  });
+  const tasksInRange = state.tasks.filter(t=>t.dueDate>=start && t.dueDate<=end);
+  const txs = txInRange(start,end);
+  return {
+    habitPct: dailyTotal>0 ? Math.round((habitPctSum/dates.length)*100) : null,
+    avgScore: scoreCount>0 ? Math.round(scoreSum/scoreCount) : null,
+    workoutDays, stepsSum, journalCount,
+    tasksDue: tasksInRange.length, tasksCompleted: tasksInRange.filter(t=>t.done).length,
+    moneySaved: sumTx(txs,"income")-sumTx(txs,"expense"),
+    learnDoneTotal: state.learn.filter(l=>l.status==="Done").length,
+    dayCount: dates.length,
+  };
+}
+function statGridHtml(stats){
+  const rows = [];
+  if(stats.habitPct!=null) rows.push([`${stats.habitPct}%`, "Habit completion"]);
+  if(stats.avgScore!=null) rows.push([`${stats.avgScore}`, "Avg Discipline Score"]);
+  rows.push([`${computeStreak()}`, "Current streak"]);
+  rows.push([`${stats.workoutDays}`, "Workout days"]);
+  if(state.settings.stepsOn) rows.push([`${stats.stepsSum.toLocaleString("en-IN")}`, "Total steps"]);
+  rows.push([`₹${stats.moneySaved.toLocaleString("en-IN")}`, "Money saved"]);
+  rows.push([`${stats.tasksCompleted}/${stats.tasksDue}`, "Tasks completed"]);
+  rows.push([`${stats.journalCount}`, "Journal entries"]);
+  return rows.map(([num,label])=> `<div class="mini-stat"><div class="mini-stat-num mono">${num}</div><div class="mini-stat-label">${escapeHtml(label)}</div></div>`).join("");
+}
+function renderReviews(){
+  if(reviewSeg==="week"){
+    document.getElementById("reviewWeekLabel").textContent = `Week ${reviewWeekIdx+1} of 52`;
+    const {start,end} = weekIndexDateRange(reviewWeekIdx);
+    document.getElementById("weekReviewStats").innerHTML = statGridHtml(computeRangeStats(start,end));
+    const rev = state.reviews.weekly[reviewWeekIdx] || {};
+    document.getElementById("weekWentWell").value = rev.wentWell || "";
+    document.getElementById("weekImprove").value = rev.improve || "";
+    document.getElementById("weekFocus").value = rev.focus || "";
+  } else if(reviewSeg==="month"){
+    const m = MONTHS[reviewMonthIdx];
+    document.getElementById("reviewMonthLabel").textContent = `${m.name} ${m.year}`;
+    const {start,end} = monthRangeForIndex(reviewMonthIdx);
+    document.getElementById("monthReviewStats").innerHTML = statGridHtml(computeRangeStats(start,end));
+    const rev = state.reviews.monthly[reviewMonthIdx] || {};
+    document.getElementById("monthWin").value = rev.biggestWin || "";
+    document.getElementById("monthImprove").value = rev.needsImprovement || "";
+    document.getElementById("monthFocus").value = rev.focusNext || "";
+  } else {
+    const start = fmtDate(YEAR_START);
+    const yearEnd = new Date(YEAR_START); yearEnd.setFullYear(yearEnd.getFullYear()+1); yearEnd.setDate(yearEnd.getDate()-1);
+    const end = fmtDate(yearEnd);
+    document.getElementById("yearReviewStats").innerHTML = statGridHtml(computeRangeStats(start, end<todayKey()?end:todayKey()));
+    document.getElementById("yearChanged").value = state.reviews.yearly.whatChanged || "";
+  }
+}
+document.getElementById("saveWeekReviewBtn").addEventListener("click", ()=>{
+  state.reviews.weekly[reviewWeekIdx] = {
+    wentWell: document.getElementById("weekWentWell").value,
+    improve: document.getElementById("weekImprove").value,
+    focus: document.getElementById("weekFocus").value,
+    savedAt: Date.now(),
+  };
+  saveState(); toast("Weekly review saved");
+});
+document.getElementById("saveMonthReviewBtn").addEventListener("click", ()=>{
+  state.reviews.monthly[reviewMonthIdx] = {
+    biggestWin: document.getElementById("monthWin").value,
+    needsImprovement: document.getElementById("monthImprove").value,
+    focusNext: document.getElementById("monthFocus").value,
+    savedAt: Date.now(),
+  };
+  saveState(); toast("Monthly review saved");
+});
+document.getElementById("saveYearReviewBtn").addEventListener("click", ()=>{
+  state.reviews.yearly = { whatChanged: document.getElementById("yearChanged").value, savedAt: Date.now() };
+  saveState(); toast("Year reflection saved");
+});
+document.getElementById("exportYearReportBtn").addEventListener("click", ()=>{
+  const start = fmtDate(YEAR_START);
+  const end = todayKey();
+  const s = computeRangeStats(start, end);
+  const xp = computeTotalXP(); const level = computeLevel(xp); const rank = rankForLevel(level);
+  const lines = [
+    "ONE PIECE — DISCIPLINE TRACKER", "YOUR 2026-27 JOURNEY (through " + end + ")", "",
+    `Habit completion: ${s.habitPct}%`, `Average Discipline Score: ${s.avgScore}`,
+    `Current streak: ${computeStreak()} days`, `Workout days: ${s.workoutDays}`,
+    `Money saved: ₹${s.moneySaved.toLocaleString("en-IN")}`,
+    `Tasks completed: ${s.tasksCompleted}/${s.tasksDue}`, `Journal entries: ${s.journalCount}`,
+    `Learn topics completed: ${s.learnDoneTotal}`,
+    `Level ${level} — ${rank.name} (${xp} XP)`,
+    `Achievements unlocked: ${ACHIEVEMENTS.filter(a=>state.unlockedAchievements[a.id]).length}/${ACHIEVEMENTS.length}`,
+    "", "What changed this year:", state.reviews.yearly.whatChanged || "(not written yet)",
+  ];
+  const blob = new Blob([lines.join("\n")], {type:"text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `one-piece-year-report-${end}.txt`;
+  a.click();
+  toast("Year report downloaded");
+});
+
+/* ---------- SMART INSIGHTS (Analytics) ---------- */
+function renderInsights(){
+  const wrap = document.getElementById("insightsList");
+  if(!wrap) return;
+  const insights = [];
+  const loggedDates = Object.keys(state.dailyLogs);
+  if(state.habits.daily.length>0 && loggedDates.length>=14){
+    const byWeekday = [0,0,0,0,0,0,0], countByWeekday=[0,0,0,0,0,0,0];
+    loggedDates.forEach(d=>{
+      const wd = new Date(d).getDay();
+      const log = state.dailyLogs[d];
+      let pctSum=0; state.habits.daily.forEach((h,i)=>pctSum+=entryProgress(log[i],h).pct);
+      byWeekday[wd] += pctSum/state.habits.daily.length;
+      countByWeekday[wd]++;
+    });
+    const avgs = byWeekday.map((v,i)=> countByWeekday[i]>0 ? v/countByWeekday[i] : -1);
+    const names = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    let bestI=-1, worstI=-1;
+    avgs.forEach((v,i)=>{ if(v>=0 && (bestI===-1||v>avgs[bestI])) bestI=i; if(v>=0 && (worstI===-1||v<avgs[worstI])) worstI=i; });
+    if(bestI>-1) insights.push(`${names[bestI]} is your strongest day for habits, averaging ${Math.round(avgs[bestI]*100)}% completion.`);
+    if(worstI>-1 && worstI!==bestI) insights.push(`${names[worstI]} tends to be your weakest day, averaging ${Math.round(avgs[worstI]*100)}% completion.`);
+  }
+  if(state.transactions.length>=14){
+    const spendByType = {weekday:[], weekend:[]};
+    const txDates = [...new Set(state.transactions.map(t=>t.date))];
+    txDates.forEach(d=>{
+      const wd = new Date(d).getDay();
+      const spend = sumTx(txOnDate(d),"expense");
+      (wd===0||wd===6 ? spendByType.weekend : spendByType.weekday).push(spend);
+    });
+    if(spendByType.weekday.length>=3 && spendByType.weekend.length>=2){
+      const avgWeekday = spendByType.weekday.reduce((a,b)=>a+b,0)/spendByType.weekday.length;
+      const avgWeekend = spendByType.weekend.reduce((a,b)=>a+b,0)/spendByType.weekend.length;
+      if(avgWeekend > avgWeekday*1.15){
+        insights.push(`You spend more on weekends — about ₹${Math.round(avgWeekend)} vs ₹${Math.round(avgWeekday)} on weekdays.`);
+      } else if(avgWeekday > avgWeekend*1.15){
+        insights.push(`You spend more on weekdays — about ₹${Math.round(avgWeekday)} vs ₹${Math.round(avgWeekend)} on weekends.`);
+      }
+    }
+  }
+  if(state.exerciseNames.length>0 && Object.keys(state.exerciseLogs).length>=7 && state.habits.daily.length>0){
+    let onWorkoutDays=0, onWorkoutCount=0, onRestDays=0, onRestCount=0;
+    Object.keys(state.dailyLogs).forEach(d=>{
+      const log = state.dailyLogs[d];
+      let pctSum=0; state.habits.daily.forEach((h,i)=>pctSum+=entryProgress(log[i],h).pct);
+      const pct = pctSum/state.habits.daily.length;
+      if((state.exerciseLogs[d]||[]).length>0){ onWorkoutDays+=pct; onWorkoutCount++; }
+      else { onRestDays+=pct; onRestCount++; }
+    });
+    if(onWorkoutCount>=3 && onRestCount>=3){
+      const wPct = Math.round((onWorkoutDays/onWorkoutCount)*100);
+      const rPct = Math.round((onRestDays/onRestCount)*100);
+      if(wPct > rPct+5) insights.push(`You complete ${wPct-rPct} percentage points more of your habits on days you also work out.`);
+    }
+  }
+  if(Object.keys(state.journalEntries).length>=7 && state.habits.daily.length>0){
+    let journaledPct=0, journaledCount=0;
+    Object.keys(state.journalEntries).forEach(d=>{
+      const log = state.dailyLogs[d];
+      if(!log) return;
+      let pctSum=0; state.habits.daily.forEach((h,i)=>pctSum+=entryProgress(log[i],h).pct);
+      journaledPct += pctSum/state.habits.daily.length; journaledCount++;
+    });
+    if(journaledCount>=5){
+      insights.push(`Your journaled days had an average habit completion of ${Math.round((journaledPct/journaledCount)*100)}%.`);
+    }
+  }
+  if(insights.length===0){
+    wrap.innerHTML = `<p class="hint">Keep logging — insights appear automatically once there's enough data to say something meaningful (usually 2+ weeks).</p>`;
+  } else {
+    wrap.innerHTML = insights.map(t=> `<div class="time-of-day-row" style="justify-content:flex-start;"><span>💡 ${escapeHtml(t)}</span></div>`).join("");
+  }
+}
+
 /* ---------- Init ---------- */
+applyHomeCardVisibility();
+applyHomeCardOrder();
 renderHome();
 checkTaskReminders();
 topUpRecurringTasks();
 applySectionBackgrounds();
 checkAchievements();
+if(!state.settings.onboardingDone){
+  document.getElementById("onboardingOverlay").classList.remove("hidden");
+}
+if(state.appLock.enabled){
+  showLockScreen();
+}

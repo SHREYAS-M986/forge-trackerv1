@@ -1,4 +1,4 @@
-const CACHE = "forge-cache-v13";
+const CACHE = "forge-cache-v15";
 const ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./chart.min.js",
   "./three.module.min.js", "./body-model.js", "./manifest.json",

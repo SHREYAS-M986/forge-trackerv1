@@ -22,9 +22,14 @@
     <img src="icons/icon-192.png" width="26" height="26" alt="" style="border-radius:6px;" />
     <span>ONE PIECE</span>
   </div>
-  <button id="settingsBtn" class="icon-btn" aria-label="Settings">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#CDD6F4" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9c.2.6.7 1 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z"/></svg>
-  </button>
+  <div class="topbar-actions">
+    <button id="searchBtn" class="icon-btn" aria-label="Search">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#CDD6F4" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    </button>
+    <button id="settingsBtn" class="icon-btn" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#CDD6F4" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9c.2.6.7 1 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z"/></svg>
+    </button>
+  </div>
 </header>
 
 <div class="quote-ticker" id="quoteTicker">Loading today's quote…</div>
@@ -35,42 +40,55 @@
   <section class="view" id="view-home" data-view-name="home">
     <div class="reminder-banner" id="reminderBanner"></div>
 
-    <div class="ring-card">
-      <div class="ring-wrap">
-        <svg viewBox="0 0 140 140" class="ring-svg">
-          <circle cx="70" cy="70" r="60" class="ring-track"/>
-          <circle cx="70" cy="70" r="60" class="ring-progress" id="ringProgress"/>
-        </svg>
-        <div class="ring-center">
-          <div class="ring-pct" id="ringPct">0%</div>
-          <div class="ring-label">today</div>
+    <div id="homeCard-ring">
+      <div class="ring-card">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 140 140" class="ring-svg">
+            <circle cx="70" cy="70" r="60" class="ring-track"/>
+            <circle cx="70" cy="70" r="60" class="ring-progress" id="ringProgress"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct" id="ringPct">0%</div>
+            <div class="ring-label">today</div>
+          </div>
         </div>
-      </div>
-      <div class="ring-stats">
-        <div class="stat">
-          <div class="stat-num mono" id="streakNum">0</div>
-          <div class="stat-label">day streak</div>
-        </div>
-        <div class="stat">
-          <div class="stat-num mono" id="doneNum">0/7</div>
-          <div class="stat-label">habits today</div>
-        </div>
-        <div class="stat">
-          <div class="stat-num mono" id="ratingNum">—</div>
-          <div class="stat-label">today's rating</div>
-        </div>
-        <div class="stat hidden" id="stepsStatWrap">
-          <div class="stat-num mono" id="stepsStatNum">0</div>
-          <div class="stat-label">steps today</div>
+        <div class="ring-stats">
+          <div class="stat">
+            <div class="stat-num mono" id="streakNum">0</div>
+            <div class="stat-label">day streak</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num mono" id="doneNum">0/7</div>
+            <div class="stat-label">habits today</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num mono" id="ratingNum">—</div>
+            <div class="stat-label">today's rating</div>
+          </div>
+          <div class="stat hidden" id="stepsStatWrap">
+            <div class="stat-num mono" id="stepsStatNum">0</div>
+            <div class="stat-label">steps today</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <h3 class="section-title">Today's daily habits</h3>
-    <div class="card-list" id="todayHabits"></div>
+    <div id="homeCard-discipline">
+      <div class="discipline-card" id="disciplineCard"></div>
+    </div>
+    <div id="homeCard-xp">
+      <div class="xp-card" id="xpCard"></div>
+    </div>
 
-    <h3 class="section-title">Last 14 days</h3>
-    <div class="chart-card"><canvas id="trendChart" height="160"></canvas></div>
+    <div id="homeCard-habits">
+      <h3 class="section-title">Today's daily habits</h3>
+      <div class="card-list" id="todayHabits"></div>
+    </div>
+
+    <div id="homeCard-trend">
+      <h3 class="section-title">Last 14 days</h3>
+      <div class="chart-card"><canvas id="trendChart" height="160"></canvas></div>
+    </div>
   </section>
 
   <!-- HABITS -->
@@ -239,6 +257,9 @@
       <div class="mini-stat"><div class="mini-stat-num mono" id="anaMonthRate">0%</div><div class="mini-stat-label">Savings rate</div></div>
     </div>
     <div class="derived-row"><span>Average daily spending (this month)</span><b id="anaAvgDailySpend" class="mono">₹0</b></div>
+
+    <h3 class="section-title">Smart Insights</h3>
+    <div id="insightsList"></div>
   </section>
 
   <!-- MONEY -->
@@ -413,6 +434,54 @@
     <div class="card-list" id="achievementsList"></div>
   </section>
 
+  <!-- REVIEWS -->
+  <section class="view hidden" id="view-reviews" data-view-name="reviews">
+    <div class="segmented" id="reviewSeg">
+      <button class="seg-btn active" data-rseg="week">Week</button>
+      <button class="seg-btn" data-rseg="month">Month</button>
+      <button class="seg-btn" data-rseg="year">Year</button>
+    </div>
+
+    <div id="rseg-week">
+      <div class="month-nav">
+        <button id="prevReviewWeek" class="icon-btn">‹</button>
+        <div class="month-label" id="reviewWeekLabel">Week 1</div>
+        <button id="nextReviewWeek" class="icon-btn">›</button>
+      </div>
+      <div class="stat-grid" id="weekReviewStats"></div>
+      <div class="form-card">
+        <label>What went well?<input type="text" id="weekWentWell" /></label>
+        <label>What should improve?<input type="text" id="weekImprove" /></label>
+        <label>Main focus next week<input type="text" id="weekFocus" /></label>
+        <button class="add-btn" id="saveWeekReviewBtn">Save review</button>
+      </div>
+    </div>
+
+    <div id="rseg-month" class="hidden">
+      <div class="month-nav">
+        <button id="prevReviewMonth" class="icon-btn">‹</button>
+        <div class="month-label" id="reviewMonthLabel">August 2026</div>
+        <button id="nextReviewMonth" class="icon-btn">›</button>
+      </div>
+      <div class="stat-grid" id="monthReviewStats"></div>
+      <div class="form-card">
+        <label>Biggest win<input type="text" id="monthWin" /></label>
+        <label>What needs improvement<input type="text" id="monthImprove" /></label>
+        <label>Focus for next month<input type="text" id="monthFocus" /></label>
+        <button class="add-btn" id="saveMonthReviewBtn">Save review</button>
+      </div>
+    </div>
+
+    <div id="rseg-year" class="hidden">
+      <div class="stat-grid" id="yearReviewStats"></div>
+      <div class="form-card">
+        <label>What changed this year?<input type="text" id="yearChanged" /></label>
+        <button class="add-btn" id="saveYearReviewBtn">Save reflection</button>
+        <button class="add-btn secondary" id="exportYearReportBtn">Export year report (.txt)</button>
+      </div>
+    </div>
+  </section>
+
   <!-- SETTINGS -->
   <section class="view hidden" id="view-settings" data-view-name="settings">
 
@@ -480,6 +549,14 @@
         <span>Task due reminders</span>
         <label class="switch"><input type="checkbox" id="taskNotifToggle" /><span class="slider"></span></label>
       </div>
+      <div class="derived-row">
+        <span>Quiet hours (no notifications)</span>
+        <label class="switch"><input type="checkbox" id="quietHoursToggle" /><span class="slider"></span></label>
+      </div>
+      <div class="mh-field-row">
+        <input type="time" id="quietStartInput" />
+        <input type="time" id="quietEndInput" />
+      </div>
       <p class="hint">This checks while One Piece is open or installed, and shows a local notification once granted. Real background alarms on a fully-closed browser app aren't reliable on Android — for a guaranteed nudge, also set a phone alarm labelled "Open One Piece".</p>
     </div>
 
@@ -501,6 +578,26 @@
       <button class="add-btn secondary" id="logWeightNowBtn">Log weight now</button>
     </div>
 
+    <h3 class="section-title">App lock</h3>
+    <div class="form-card">
+      <div class="derived-row">
+        <span>Require a PIN to open the app</span>
+        <label class="switch"><input type="checkbox" id="appLockToggle" /><span class="slider"></span></label>
+      </div>
+      <div id="setPinWrap" class="hidden">
+        <label>New PIN (4–6 digits)<input type="password" id="newPinInput" inputmode="numeric" maxlength="6" /></label>
+        <label>Confirm PIN<input type="password" id="confirmPinInput" inputmode="numeric" maxlength="6" /></label>
+        <button class="add-btn secondary" id="savePinBtn">Save PIN</button>
+      </div>
+      <p class="hint">PIN-only for now — true biometric unlock needs OS-level integration this browser-based app can't reliably provide, so it isn't included. The PIN is stored as a one-way hash on this device, never in plain text.</p>
+    </div>
+
+    <h3 class="section-title">Home dashboard</h3>
+    <div class="form-card">
+      <p class="hint">Show, hide, or reorder the cards on your Home screen.</p>
+      <div id="homeCardsList"></div>
+    </div>
+
     <h3 class="section-title">Install</h3>
     <div class="form-card">
       <button class="add-btn" id="installBtn">Install One Piece to home screen</button>
@@ -512,6 +609,22 @@
       <button class="add-btn" id="exportBtn">Export backup (.json)</button>
       <button class="add-btn secondary" id="importBtn">Import backup</button>
       <input type="file" id="importFile" accept=".json" class="hidden" />
+      <p class="hint" id="lastBackupHint"></p>
+    </div>
+    <div class="form-card">
+      <p class="hint">Encrypted backup — password-protected using real AES-256 encryption (Web Crypto API), for extra-sensitive data like your journal and finances.</p>
+      <button class="add-btn secondary" id="exportEncryptedBtn">Export encrypted backup</button>
+      <button class="add-btn secondary" id="importEncryptedBtn">Import encrypted backup</button>
+      <input type="file" id="importEncryptedFile" accept=".json" class="hidden" />
+    </div>
+    <div class="form-card">
+      <p class="hint">Export specific data as CSV, for spreadsheets or other tools.</p>
+      <button class="add-btn secondary" id="exportTxCsvBtn">Transactions CSV</button>
+      <button class="add-btn secondary" id="exportHabitCsvBtn">Habit history CSV</button>
+      <button class="add-btn secondary" id="exportFitnessCsvBtn">Fitness CSV</button>
+      <button class="add-btn secondary" id="exportWeightCsvBtn">Weight history CSV</button>
+    </div>
+    <div class="form-card">
       <button class="add-btn danger" id="resetBtn">Reset all data</button>
     </div>
 
@@ -552,6 +665,10 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="6"/><path d="M8.5 13.5 7 21l5-2.5L17 21l-1.5-7.5"/></svg>
       <span>Achievements</span>
     </button>
+    <button class="sheet-item" data-view="reviews">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+      <span>Reviews</span>
+    </button>
   </div>
 </div>
 
@@ -569,59 +686,88 @@
   </div>
 </div>
 
-<!-- EXERCISE BUILDER -->
-<div class="sheet-backdrop hidden" id="exerciseBackdrop">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3 class="section-title" style="margin-top:0" id="exerciseFormTitle">Create exercise</h3>
-    <div class="form-card">
-      <label>Name *<input type="text" id="exNameInput" placeholder="e.g. Archer Push-Up" /></label>
-      <label>Category<select id="exCategoryInput">
-        <option>Strength</option><option>Calisthenics</option><option>Mobility</option>
-        <option>Cardio</option><option>Core</option><option>Stretching</option><option>Custom</option>
-      </select></label>
-      <label>Muscle group<select id="exMuscleInput">
-        <option>Chest</option><option>Back</option><option>Shoulders</option><option>Arms</option>
-        <option>Legs</option><option>Core</option><option>Full Body</option>
-      </select></label>
-      <label>Difficulty<select id="exDifficultyInput">
-        <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
-      </select></label>
-      <label>Equipment (optional)<input type="text" id="exEquipmentInput" placeholder="e.g. Pull-up bar, none" /></label>
-      <label>Sets<input type="number" id="exSetsInput" inputmode="numeric" placeholder="e.g. 3" /></label>
-      <label>Reps<input type="text" id="exRepsInput" placeholder="e.g. 12 or 8-10" /></label>
-      <label>Duration (optional)<input type="text" id="exDurationInput" placeholder="e.g. 30 sec" /></label>
-      <label>Rest time (optional)<input type="text" id="exRestInput" placeholder="e.g. 60 sec" /></label>
-      <label>Description (optional)<input type="text" id="exDescriptionInput" placeholder="What this exercise is" /></label>
-      <label>Form cues (optional)<input type="text" id="exCuesInput" placeholder="Key technique tips" /></label>
-      <label>Video URL (optional)<input type="text" id="exVideoInput" placeholder="https://…" /></label>
-      <button class="add-btn" id="exerciseSaveBtn">Save exercise</button>
-      <button class="add-btn secondary" id="exerciseCancelBtn">Cancel</button>
-    </div>
+<!-- APP LOCK SCREEN -->
+<div class="lock-screen hidden" id="lockScreen">
+  <div class="lock-inner">
+    <div class="lock-icon">🔒</div>
+    <div class="lock-title">One Piece — Locked</div>
+    <input type="password" id="lockPinInput" inputmode="numeric" maxlength="6" placeholder="Enter PIN" />
+    <div class="lock-error hidden" id="lockError">Incorrect PIN</div>
+    <button class="add-btn" id="lockUnlockBtn">Unlock</button>
   </div>
 </div>
 
-<!-- ROUTINE BUILDER -->
-<div class="sheet-backdrop hidden" id="routineBackdrop">
+<!-- GLOBAL SEARCH -->
+<div class="sheet-backdrop hidden" id="searchBackdrop">
+  <div class="sheet search-sheet">
+    <div class="sheet-handle"></div>
+    <input type="text" id="globalSearchInput" placeholder="Search habits, transactions, tasks, journal…" class="search-input" />
+    <div id="searchResults"></div>
+  </div>
+</div>
+
+<!-- QUICK ADD -->
+<button class="fab" id="quickAddFab" aria-label="Quick add">＋</button>
+<div class="sheet-backdrop hidden" id="quickAddBackdrop">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h3 class="section-title" style="margin-top:0" id="routineFormTitle">Create routine</h3>
-    <div class="form-card">
-      <label>Routine name *<input type="text" id="routineNameInput" placeholder="e.g. Push Day" /></label>
+    <button class="sheet-item" data-quick="habit"><span>✅</span><span>Complete a habit</span></button>
+    <button class="sheet-item" data-quick="exercise"><span>💪</span><span>Log exercise</span></button>
+    <button class="sheet-item" data-quick="transaction"><span>💰</span><span>Add transaction</span></button>
+    <button class="sheet-item" data-quick="goal"><span>🎯</span><span>Update a goal</span></button>
+    <button class="sheet-item" data-quick="learn"><span>📖</span><span>Log learning</span></button>
+    <button class="sheet-item" data-quick="task"><span>📅</span><span>Add task</span></button>
+    <button class="sheet-item" data-quick="journal"><span>📔</span><span>Journal entry</span></button>
+    <button class="sheet-item" data-quick="weight"><span>⚖️</span><span>Log weight</span></button>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div class="onboarding-overlay hidden" id="onboardingOverlay">
+  <div class="onboarding-card">
+    <div id="obStep1">
+      <h2>Welcome</h2>
+      <p class="hint">Your discipline journey begins today.</p>
+      <button class="add-btn" data-ob-next="2">Get started</button>
+      <button class="add-btn secondary" id="obSkipAll">Skip setup</button>
     </div>
-    <h3 class="section-title">Exercises in this routine</h3>
-    <div id="routineExerciseList"></div>
-    <div class="form-card">
-      <label>Add exercise<select id="routineExercisePicker"></select></label>
-      <div class="mh-field-row">
-        <input type="number" id="routineSetsInput" placeholder="Sets" inputmode="numeric" />
-        <input type="text" id="routineRepsInput" placeholder="Reps/Duration" />
-        <input type="text" id="routineRestInput" placeholder="Rest" />
+    <div id="obStep2" class="hidden">
+      <h2>Pick what you'll use</h2>
+      <p class="hint">You can change this anytime — it just tailors your Discipline Score.</p>
+      <div class="ob-modules" id="obModuleChoices">
+        <label><input type="checkbox" value="habits" checked disabled /> Habits</label>
+        <label><input type="checkbox" value="fitness" checked /> Fitness</label>
+        <label><input type="checkbox" value="money" checked /> Money</label>
+        <label><input type="checkbox" value="learn" checked /> Learn</label>
+        <label><input type="checkbox" value="calendar" checked /> Calendar</label>
+        <label><input type="checkbox" value="journal" checked /> Journal</label>
       </div>
-      <button class="add-btn secondary" id="routineAddExerciseBtn">+ Add to routine</button>
+      <button class="add-btn" data-ob-next="3">Next</button>
     </div>
-    <button class="add-btn" id="routineSaveBtn">Save routine</button>
-    <button class="add-btn secondary" id="routineCancelBtn">Cancel</button>
+    <div id="obStep3" class="hidden">
+      <h2>Your first habit</h2>
+      <label>Habit name<input type="text" id="obHabitName" placeholder="e.g. Drink water" /></label>
+      <button class="add-btn" data-ob-next="4">Next</button>
+    </div>
+    <div id="obStep4" class="hidden">
+      <h2>Pick a theme</h2>
+      <div class="theme-swatches" id="obThemeSwatches">
+        <div class="theme-swatch active" data-ob-theme="classic"><div class="theme-dots"><span class="theme-dot" style="background:#F9C74F"></span><span class="theme-dot" style="background:#8FE3D0"></span></div><div class="theme-swatch-label">Classic Gold</div></div>
+        <div class="theme-swatch" data-ob-theme="ocean"><div class="theme-dots"><span class="theme-dot" style="background:#E8B94E"></span><span class="theme-dot" style="background:#4FD1C5"></span></div><div class="theme-swatch-label">Ocean Voyage</div></div>
+        <div class="theme-swatch" data-ob-theme="onepiece"><div class="theme-dots"><span class="theme-dot" style="background:#E8C34A"></span><span class="theme-dot" style="background:#C1272D"></span></div><div class="theme-swatch-label">One Piece</div></div>
+      </div>
+      <button class="add-btn" data-ob-next="5">Next</button>
+    </div>
+    <div id="obStep5" class="hidden">
+      <h2>Daily reminder</h2>
+      <label>Remind me at<input type="time" id="obReminderTime" value="20:00" /></label>
+      <button class="add-btn" data-ob-next="6">Next</button>
+    </div>
+    <div id="obStep6" class="hidden">
+      <h2>You're all set</h2>
+      <p class="hint">Your 2026–27 journey starts now.</p>
+      <button class="add-btn" id="obFinish">Start using One Piece</button>
+    </div>
   </div>
 </div>
 
